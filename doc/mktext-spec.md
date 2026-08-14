@@ -155,8 +155,12 @@ When the normalized key exists, `get` SHALL:
 - write the exact stored value to standard output;
 - add no newline or other delimiter;
 - return status 0 when the complete value is written;
-- return status 4 if standard output cannot accept the complete value;
+- return status 4 when Bash reports a recoverable output failure to the function;
 - write nothing to standard error for a normal successful or absent lookup.
+
+A signal that terminates the writing shell or pipeline component before `get`
+returns may produce the shell's signal-derived status instead of 4.  `mktext`
+SHALL NOT alter caller signal traps to normalize that condition.
 
 When the normalized key does not exist, `get` SHALL:
 
@@ -370,8 +374,10 @@ Replacement values may themselves contain newline characters.  Those newlines
 are intentional output data and do not change the fact that template scanning is
 line-local.
 
-If the input stream cannot be read completely or standard output cannot accept
-the complete rendered data, `render` SHALL return status 4.
+If Bash reports a recoverable input/output error to `render`, the operation
+SHALL return status 4.  A signal that terminates the writing shell or pipeline
+component before `render` returns may produce the shell's signal-derived status
+instead.
 
 ## Standard Streams
 
@@ -396,13 +402,20 @@ The public status meanings are:
 1  requested key is absent for get/exists
 2  invalid operation name, arity, or other API usage
 3  invalid context reference, readonly mutation, or invalid key
-4  data input/output failure
+4  recoverable data input/output failure
 ```
 
-Status 4 applies when public data cannot be transferred completely, including a
-failed `get` write or a `render` input/output failure.
+Status 4 applies when Bash reports a recoverable public-data I/O failure to the
+function, including a failed `get` write or a `render` input/output failure.
 
-No other public status meaning is defined for v1.
+These statuses describe normal function return paths.  If the shell process or
+pipeline component is terminated by a signal before `mktext` returns, callers
+may observe the shell's signal-derived status instead.  `mktext` SHALL NOT
+install or replace caller signal traps solely to translate such conditions into
+status 4.  For example, a conventional Bash status for `SIGPIPE` is 141
+(`128 + 13`).
+
+No other public normal-return status meaning is defined for v1.
 
 A future implementation may use additional internal statuses, but they SHALL be
 translated to the documented public contract before returning from `mktext`.
@@ -451,7 +464,7 @@ The following are public compatibility surfaces:
 - unknown/malformed preservation behavior;
 - stream behavior and final-newline preservation;
 - standard-output and standard-error roles;
-- public return statuses;
+- public normal-return statuses;
 - the sourceable `mktext.bash` artifact.
 
 Changes to these surfaces require deliberate compatibility review and may

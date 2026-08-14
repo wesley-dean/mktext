@@ -26,12 +26,20 @@ different stream to avoid corrupting caller data.  Writes to that data stream
 can also fail independently of API validation, so the status contract needs one
 small I/O-failure category that applies wherever public data is transferred.
 
+Bash signals form a separate boundary.  A process writing to a pipe whose reader
+has closed may receive `SIGPIPE` before a builtin can return a recoverable write
+error to `mktext`.  Normal function return statuses cannot reliably replace a
+signal-derived process or pipeline status without installing signal traps that
+would interfere with the caller's shell environment.
+
 ## Decision Drivers
 
 - Preserve standard output for data.
 - Make membership tests natural in Bash conditionals.
 - Distinguish a normal negative lookup from invalid API usage.
-- Distinguish API failures from failures while reading or writing public data.
+- Distinguish API failures from recoverable failures while reading or writing
+  public data.
+- Preserve the caller's ownership of signal handling.
 - Keep the status model small enough to remember and document.
 - Never `exit` from a sourced library for ordinary errors.
 
@@ -46,22 +54,31 @@ The public return-status contract SHALL be:
 1  requested key is absent for get/exists
 2  invalid operation name, arity, or other API usage
 3  invalid context reference, readonly mutation, or invalid key
-4  data input/output failure
+4  recoverable data input/output failure
 ```
 
 Specific operation rules are:
 
 - `set` returns 0 after storing the value;
 - `get` returns 0 and writes the exact value when present, returns 1 and writes
-  nothing when absent, or returns 4 if the value cannot be written completely;
+  nothing when absent, or returns 4 when Bash reports a recoverable output error
+  to the function before a signal terminates execution;
 - `exists` returns 0 when present and 1 when absent, with no standard output;
 - `unset` is idempotent and returns 0 for a valid writable context/key whether
   or not the key previously existed;
 - `render` returns 0 when the complete input stream is rendered according to the
-  defined grammar, including when unknown macros are preserved, or returns 4 if
-  input or output I/O prevents complete rendering;
+  defined grammar, including when unknown macros are preserved, or returns 4
+  when Bash reports a recoverable input/output error to the function;
 - invalid operations, argument counts, contexts, readonly mutations, or keys
   produce concise diagnostics and the corresponding status above.
+
+These values describe normal function return paths.  If the shell process or a
+pipeline component is terminated by a signal before `mktext` can return, the
+caller may observe the shell's signal-derived status instead.  For example,
+`SIGPIPE` is commonly represented as status 141 (`128 + 13`).
+
+`mktext` SHALL NOT install, replace, or clear caller signal traps solely to
+normalize signal-derived failures into status 4.
 
 The library SHALL use `return`, not `exit`, for its public error paths.
 
@@ -86,6 +103,13 @@ separate numeric categories for each operation would add compatibility surface
 without changing the caller's practical recovery options.  One data-I/O
 category is sufficient.
 
+### Trap SIGPIPE and translate it to status 4
+
+The library could temporarily manipulate `SIGPIPE` handling in an attempt to
+turn closed-pipe failures into an ordinary function return.  This was rejected
+because a sourced library should not silently alter the caller's signal policy,
+and because ordinary shell signal semantics already communicate the condition.
+
 ### Print missing-key diagnostics from `get`
 
 A missing key is often a normal query result.  Treating it as a noisy error would
@@ -107,16 +131,20 @@ fi
 ```
 
 Callers that care about the difference between absence, misuse, invalid state,
-and incomplete data transfer can distinguish those categories without parsing
-human-readable diagnostics.
+and recoverable incomplete data transfer can distinguish those categories
+without parsing human-readable diagnostics.
+
+Callers that care about signal termination must continue to handle shell signals
+and pipeline statuses according to normal Bash semantics.
 
 These numeric meanings are part of the public API and require compatibility
 consideration if changed.
 
 ## Open Questions and Follow-Ups
 
-Tests should cover observable broken-input and broken-output behavior when the
-host shell can exercise those conditions reliably.
+Tests should cover recoverable input/output failures where the host operating
+system provides a deterministic mechanism such as `/dev/full`.  Signal behavior
+should be documented rather than forced through library-owned traps.
 
 ## Related Decisions
 
