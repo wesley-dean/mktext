@@ -185,14 +185,21 @@ __mktext_render_line() {
 ## @brief Streams template data from standard input through the line renderer.
 ## @details
 ## `read -r` removes a newline delimiter from a successfully read physical line.
-## The helper writes that delimiter back only when `read` reported one, which
-## preserves the distinction between newline-terminated input and a final
-## unterminated line.  A nonzero `read` status of 1 represents ordinary EOF;
-## other nonzero statuses are treated as rendering I/O failures.
+## The helper writes that delimiter back only when `read` reported success,
+## preserving the distinction between newline-terminated input and a final
+## unterminated line.
+##
+## Bash uses `read` status 1 for ordinary EOF and for some input failures.  The
+## implementation must therefore treat status 1 as end-of-stream and cannot
+## distinguish every such failure without adding platform-specific or external
+## probing.  Nonzero statuses other than 1 are treated as distinguishable input
+## failures.  Output failures reported by `printf` are also mapped to status 4.
 ##
 ## @param $1 Name of a validated associative-array context.
-## @retval 0 The complete input stream was rendered successfully.
-## @retval 4 An input or output failure prevented complete rendering.
+## @retval 0 The stream reached the Bash status used for EOF after rendering any
+## buffered final line.
+## @retval 4 A distinguishable input failure or recoverable output failure
+## prevented complete rendering.
 ##
 ## @par Examples
 ## @code
@@ -261,7 +268,7 @@ __mktext_render() {
 ## @retval 1 `get` or `exists` did not find the requested key.
 ## @retval 2 Operation name, arity, or other API usage is invalid.
 ## @retval 3 Context or key validation failed.
-## @retval 4 Rendering could not complete because of an I/O failure.
+## @retval 4 A distinguishable recoverable data input/output failure occurred.
 ##
 ## @par Examples
 ## @code

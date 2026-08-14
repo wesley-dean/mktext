@@ -143,6 +143,19 @@ else
 fi
 check_status 1 "${status}" 'unset removes key'
 
+use_local_context() {
+  local -A local_context=()
+
+  mktext set local_context TITLE 'Local' || return
+  mktext get local_context TITLE
+}
+
+output=''
+status=0
+capture output status use_local_context
+check_status 0 "${status}" 'caller-local context status'
+check_equal 'Local' "${output}" 'caller-local context value'
+
 # This array is likewise consumed indirectly by its variable name.
 # shellcheck disable=SC2034
 declare -Ar readonly_context=([TITLE]='Readonly')
