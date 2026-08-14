@@ -15,8 +15,10 @@ recognized macros such as `{TITLE}` or `{NUMBER4}` with literal values.
 The project deliberately does less than a general template engine.  Acquisition
 and transformation belong to callers.  `mktext` performs rendering only.
 
-The canonical runtime artifact is `mktext.bash`, which is intended to be sourced
-by Bash 4.3+ callers.
+The canonical maintained implementation is `src/mktext.bash`.  `make build`
+generates the canonical sourceable release artifact at `dist/mktext.bash` and
+embeds version, source-revision timestamp, and commit metadata.  Bash 4.3+ callers
+source the generated artifact in production use.
 
 ## Read the ADRs and Specification First
 
@@ -52,15 +54,18 @@ Do not invent rationale when the repository does not establish it.
 ## Architectural Principles
 
 - Bash 4.3+ is the minimum runtime.
-- `mktext.bash` is the sourceable runtime and release artifact.
-- One public `mktext` function dispatches the supported operations.
+- `src/mktext.bash` is the maintained implementation.
+- `dist/mktext.bash` is the generated, sourceable release artifact.
+- Build metadata is injected at build time and does not add runtime Git access.
+- One public `mktext` function dispatches context, rendering, help, and version
+  forms.
 - Callers own Bash associative-array contexts.
 - Keys are normalized to uppercase and follow the documented ASCII grammar.
 - Rendering is lexical, literal, single-pass, and nonrecursive.
 - Templates and values are never evaluated as shell code.
 - Rendering reads standard input and writes standard output.
 - Exact line termination is part of the public behavior.
-- No implicit external state is acquired by the library.
+- No implicit external state is acquired by ordinary rendering operations.
 - Keep the core intentionally small.
 
 ## Technology Stack
@@ -98,8 +103,24 @@ nameref.
 Do not add external runtime commands when Bash builtins can implement the
 required behavior clearly and safely.
 
-Private helpers are implementation details.  Do not expand the public namespace
-without an architectural decision.
+Private helpers and metadata variables use the reserved `__mktext_` namespace.
+Do not expand the public namespace without an architectural decision.
+
+## Build and Release Boundaries
+
+Treat `src/mktext.bash` as the source of truth.  Do not edit generated
+`dist/mktext.bash` directly.
+
+Keep the build step narrow: inject metadata and copy maintained source.  Do not
+introduce modular assembly, minification, transpilation, or another template
+language without a demonstrated need and an architectural decision.
+
+Release versions come from the semantic-version workflow and are passed
+explicitly to Make.  Development builds use the documented development version.
+Commit metadata and the build date are derived from the source revision when Git
+metadata is available.
+
+Tests must cover both maintained source and generated distribution behavior.
 
 ## Scope Discipline
 
@@ -147,13 +168,17 @@ Use Bats for the primary behavior suite.
 Tests should exercise the public `mktext` function rather than private helper
 structure whenever practical.
 
+Run the behavior suite against both `src/mktext.bash` and the generated
+`dist/mktext.bash`.  The generated artifact is a product artifact and must not be
+assumed correct merely because its maintained source passed tests.
+
 Every functional change should prompt these questions:
 
 - What observable behavior changed?
 - Which documented contract governs that behavior?
 - How can the behavior be verified automatically?
-- Does the change affect final-newline, quoting, literal-value, or return-status
-  semantics?
+- Does the change affect final-newline, quoting, literal-value, usage, version,
+  or return-status semantics?
 
 Bug fixes should add or update a regression test that would have failed before
 the fix.
@@ -168,9 +193,10 @@ When practical:
 - review the resulting diff;
 - run the relevant Make targets;
 - run Bash syntax validation;
-- run Bats tests;
-- run ShellCheck and shfmt checks;
+- run Bats tests against source and distribution artifacts;
+- run ShellCheck and shfmt checks on maintained source;
 - generate or validate documentation when documentation inputs change;
+- verify generated artifact metadata when build behavior changes;
 - verify documentation-only source changes did not alter executable lines.
 
 If a validation tool is unavailable, do not invent its result.  Report only what
@@ -180,6 +206,9 @@ was actually verified.
 
 Avoid:
 
+- editing `dist/mktext.bash` as though it were maintained source;
+- releasing a distribution artifact carrying stale or mismatched version
+  metadata;
 - adding transformations because they appear convenient;
 - using `eval` or shell expansion for substitution;
 - rescanning replacement values and accidentally making rendering recursive;
@@ -188,6 +217,7 @@ Avoid:
 - accepting malformed context names before creating namerefs;
 - treating `-` and `_` as equivalent keys;
 - writing diagnostics to standard output;
+- returning success for invalid API usage;
 - calling `exit` from ordinary library error paths;
 - testing private implementation details as though they were public contracts;
 - inventing architectural rationale;

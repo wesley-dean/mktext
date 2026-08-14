@@ -29,16 +29,26 @@ does not claim binary-safe behavior.
 
 ## Installation
 
-The canonical runtime artifact is `mktext.bash`.
+The maintained implementation lives at `src/mktext.bash`.
 
-Source it from a supported Bash process:
+`make build` generates the canonical consumer artifact:
 
-```bash
-. ./mktext.bash
+```text
+dist/mktext.bash
 ```
 
-Published consumers should pin a tagged release rather than depending on the
-moving `main` branch.
+The generated artifact embeds its semantic version, source-revision timestamp,
+and source commit.  `dist/` is generated output and is not maintained as a
+second source copy.
+
+Source the release artifact from a supported Bash process:
+
+```bash
+. ./dist/mktext.bash
+```
+
+Published consumers should pin the `mktext.bash` asset from a tagged GitHub
+release rather than depending on the moving `main` branch.
 
 ## Basic Usage
 
@@ -59,7 +69,7 @@ Output:
 ADR 0042: Fewer Incidents
 ```
 
-The public operations are:
+The public context and rendering operations are:
 
 ```text
 mktext set CONTEXT KEY VALUE
@@ -69,9 +79,39 @@ mktext unset CONTEXT KEY
 mktext render CONTEXT
 ```
 
+Help is available through equivalent forms:
+
+```text
+mktext help
+mktext -h
+mktext --help
+```
+
+Artifact version information is available through:
+
+```text
+mktext version
+mktext --version
+```
+
+A generated release artifact reports three lines:
+
+```text
+mktext 0.1.0
+build_date=2026-08-14T20:32:21+00:00
+commit=91de217275bd
+```
+
+The exact values identify the built release and source revision.
+
 Context variable names must be legal Bash identifiers and must not begin with
 the private `__mktext_` prefix.  Readonly associative arrays may be used with
 `get`, `exists`, and `render`; mutating operations reject them.
+
+Invalid operation names, missing operations, and wrong argument counts return
+status 2 and print a concise diagnostic followed by usage information to
+standard error.  Explicit help requests print usage to standard output and
+return 0.
 
 ## Macro Grammar
 
@@ -127,15 +167,15 @@ rather than `expanded`.
 The public status contract is:
 
 ```text
-0  success, or a predicate is true
+0  success, requested informational output succeeded, or a predicate is true
 1  requested key is absent for get/exists
 2  invalid operation name, arity, or other API usage
 3  invalid context reference, readonly mutation, or invalid key
-4  data input/output failure
+4  distinguishable recoverable public-data input/output failure
 ```
 
-Diagnostics are written to standard error.  Rendered data and `get` values use
-standard output.
+Diagnostics are written to standard error.  Rendered data, `get` values, help,
+and version output use standard output.
 
 ## Development
 
@@ -144,12 +184,18 @@ The project follows documentation-driven, test-second development.
 Common development tasks are exposed through Make targets:
 
 ```bash
+make build
 make check
 make format
 make test
+make test-source
+make test-dist
 make docs
 make all
 ```
+
+`make test` exercises the public behavior suite against both the maintained
+source and the generated distribution artifact.
 
 Bats is the primary behavior-test framework.  ShellCheck and shfmt are the
 canonical Bash static-analysis and formatting tools.

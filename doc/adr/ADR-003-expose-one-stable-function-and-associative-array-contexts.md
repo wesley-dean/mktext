@@ -27,6 +27,11 @@ operations and left `unset` unresolved.  Context removal is a fundamental map
 operation and can be provided without expanding rendering semantics, so the v1
 API includes it.
 
+A small amount of self-description is also valuable.  Callers should be able to
+ask the library how it is used and which built artifact they have without
+inspecting source text.  Help and version reporting therefore belong to the same
+single public dispatcher rather than requiring additional global functions.
+
 Bash dynamic scoping introduces one additional constraint.  Private local
 variables can shadow caller variables with the same name.  The implementation
 therefore reserves a private variable prefix so a nameref can be created only
@@ -41,6 +46,8 @@ operations must reject readonly contexts before performing a write.
 - Keep the public namespace small.
 - Use native Bash data structures rather than inventing a context format.
 - Permit callers to maintain more than one independent context.
+- Provide concise discoverability without creating a separate CLI program.
+- Expose build identity without requiring source inspection.
 - Validate context references before using namerefs.
 - Avoid dynamic-scope collisions with private library variables.
 - Fail predictably before attempting writes to readonly contexts.
@@ -50,7 +57,7 @@ operations must reject readonly contexts before performing a write.
 
 The public library SHALL expose one function named `mktext`.
 
-The function SHALL dispatch the following operations:
+The function SHALL dispatch the following context and rendering operations:
 
 ```text
 mktext set CONTEXT KEY VALUE
@@ -59,6 +66,25 @@ mktext exists CONTEXT KEY
 mktext unset CONTEXT KEY
 mktext render CONTEXT
 ```
+
+It SHALL also accept these informational forms:
+
+```text
+mktext help
+mktext -h
+mktext --help
+mktext version
+mktext --version
+```
+
+`help`, `-h`, and `--help` SHALL be equivalent.  They SHALL write concise usage
+information to standard output and return status 0 when the output is written
+successfully.
+
+`version` and `--version` SHALL be equivalent.  They SHALL write the version,
+source-revision timestamp, and source commit embedded in the artifact as three
+stable lines and return status 0 when the output is written successfully.  The
+release/build metadata model is defined by ADR-008.
 
 `CONTEXT` SHALL be the name of a Bash associative-array variable declared by the
 caller, for example:
@@ -84,15 +110,17 @@ Operation semantics are:
 - `exists` emits no output and communicates membership through return status;
 - `unset` removes the normalized key if present and is idempotent;
 - `render` consumes template text from standard input and writes rendered text
-  to standard output.
+  to standard output;
+- `help`, `-h`, and `--help` emit usage information without requiring a context;
+- `version` and `--version` emit artifact identity without requiring a context.
 
 Values are arbitrary Bash strings, including the empty string and embedded
 newlines.  NUL bytes remain unsupported as described by ADR-002.
 
 No implicit global context or default context SHALL exist.
 
-Private helper functions may be added as implementation details.  They are not
-public interfaces unless a later ADR explicitly says otherwise.
+Private helper functions and variables may be added as implementation details.
+They are not public interfaces unless a later ADR explicitly says otherwise.
 
 ## Considered Alternatives
 
@@ -111,6 +139,19 @@ independent contexts and introduce hidden mutable state.
 
 This avoids a persistent context but makes quoting, empty values, repeated
 renders, and larger contexts cumbersome.
+
+### Omit help and version reporting
+
+The implementation would remain smaller, but basic discoverability and artifact
+identity would then require users to inspect documentation or source files.
+These two informational surfaces are small, deterministic, and do not expand the
+rendering language.
+
+### Add a standalone CLI wrapper for help and version
+
+A second public program would create another interface and release artifact.
+Keeping informational behavior on the existing `mktext` dispatcher preserves the
+single-public-function model.
 
 ### Permit contexts to use the private prefix
 
@@ -137,22 +178,26 @@ The API is easy to vendor and document.
 Callers retain ownership of context lifetime and may inspect the associative
 array directly when debugging.
 
-The `__mktext_` context-name prefix is unavailable to callers because it belongs
-to the library's private namespace.
+The `__mktext_` prefix is reserved for library-private state.
 
 Readonly contexts can safely participate in read-only workflows.
 
-Changing operation names, argument order, output behavior, reserved context
-namespace, or context semantics is a public compatibility change.
+Users can discover supported forms and identify a built artifact without adding
+runtime dependencies or inspecting the file manually.
+
+Changing operation names, aliases, argument order, help/version output contracts,
+context semantics, reserved namespace, or rendering behavior is a public
+compatibility change.
 
 ## Open Questions and Follow-Ups
 
-None for v1.  Additional operations should require a concrete use case and
-should not be added merely for symmetry with richer data-store APIs.
+None for v1.  Additional operations or aliases should require a concrete use case
+and should not be added merely for symmetry with richer APIs.
 
 ## Related Decisions
 
 - Related to: ADR-002
 - Related to: ADR-004
 - Related to: ADR-007
+- Related to: ADR-008
 - Source assessment: `doc/bootstrap-adr-port-assessment.md`
