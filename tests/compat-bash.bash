@@ -144,6 +144,8 @@ fi
 check_status 1 "${status}" 'unset removes key'
 
 use_local_context() {
+  # This context is intentionally consumed indirectly by its local variable name.
+  # shellcheck disable=SC2034
   local -A local_context=()
 
   mktext set local_context TITLE 'Local' || return
