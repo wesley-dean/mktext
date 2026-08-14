@@ -33,6 +33,8 @@ documentation as the expected engineering toolchain.
 
 - Keep local and CI validation aligned.
 - Make common project commands easy to discover.
+- Keep the default Make invocation focused on producing the consumer artifact.
+- Keep validation explicit rather than hiding tests behind a build target.
 - Protect public behavior rather than incidental implementation structure.
 - Keep the toolchain conventional for Bash.
 - Validate both maintained source and the exact sourceable artifact users receive.
@@ -61,6 +63,12 @@ The exact underlying commands may evolve while target meanings remain stable.
 
 `build` SHALL generate `dist/mktext.bash` from `src/mktext.bash` with the metadata
 defined by ADR-008.
+
+`all` SHALL be the default build target and SHALL produce the same distribution
+artifact as `build`.  It SHALL NOT implicitly run `check`, `test`, or other
+validation targets.  Validation SHALL remain available through explicit Make
+targets so callers can choose build-only or build-and-validate behavior without
+surprise.
 
 Bats SHALL be the primary automated test framework.
 
@@ -97,9 +105,17 @@ than treating generated `dist/` output as a second source of truth.
 
 Doxygen-compatible source comments SHALL be used as defined separately.
 
-CI SHOULD invoke Make targets rather than duplicating their underlying commands.
+CI SHOULD invoke explicit Make validation targets rather than duplicating their
+underlying commands or relying on `all` to perform validation implicitly.
 
 ## Considered Alternatives
+
+### Make `all` build and validate everything
+
+This is convenient for CI, but makes the default build command perform more work
+than its name suggests and couples artifact generation to development-tool
+dependencies.  Explicit `check` and `test` targets make validation equally
+reproducible without surprising callers who only want the built artifact.
 
 ### Put commands directly in GitHub Actions
 
@@ -130,7 +146,11 @@ contract.
 
 ## Consequences
 
-A contributor can reproduce the important CI behaviors through Make.
+A contributor can build the consumer artifact with `make` or `make all` without
+also invoking the development validation toolchain.
+
+A contributor or CI job can reproduce validation explicitly with `make check`
+and `make test`.
 
 The same behavior suite protects maintained source and published distribution
 semantics.
@@ -138,8 +158,8 @@ semantics.
 Refactoring internal helpers should not require rewriting most tests when public
 behavior remains unchanged.
 
-Development tools are dependencies for contributors and CI, not runtime
-dependencies for library consumers.
+Development tools are dependencies for contributors and CI, not runtime or
+build-only dependencies for library consumers.
 
 ## Open Questions and Follow-Ups
 
