@@ -71,9 +71,13 @@ if (( BASH_VERSINFO[0] < 4 || (BASH_VERSINFO[0] == 4 && BASH_VERSINFO[1] < 3) ))
   exit 1
 fi
 
-# shellcheck source=../mktext.bash
+# The compatibility harness is executed from the repository root.  ShellCheck
+# does not follow this dynamic test-time source path during its standalone pass.
+# shellcheck disable=SC1091
 source ./mktext.bash
 
+# Context variables are consumed indirectly by name through the public API.
+# shellcheck disable=SC2034
 declare -A context=()
 
 if ! mktext set context title 'Example'; then
@@ -117,9 +121,13 @@ check_equal '{B}' "${rendered}" 'nonrecursive render output'
 
 rendered=''
 status=0
+# The dollar expression is deliberately single-quoted test data and must remain
+# literal so the renderer can prove it does not reinterpret shell syntax.
+# shellcheck disable=SC2016
 capture rendered status bash -c \
   'source ./mktext.bash; declare -A c=([TITLE]="changed"); printf "%s" '\''${TITLE} {{TITLE}} {bad key} {UNKNOWN}'\'' | mktext render c'
 check_status 0 "${status}" 'literal preservation status'
+# shellcheck disable=SC2016
 check_equal '${TITLE} {{TITLE}} {bad key} {UNKNOWN}' "${rendered}" \
   'literal preservation output'
 
@@ -135,6 +143,8 @@ else
 fi
 check_status 1 "${status}" 'unset removes key'
 
+# This array is likewise consumed indirectly by its variable name.
+# shellcheck disable=SC2034
 declare -Ar readonly_context=([TITLE]='Readonly')
 output=''
 status=0
@@ -149,6 +159,8 @@ else
 fi
 check_status 3 "${status}" 'readonly context mutation status'
 
+# The deliberately reserved name is passed by string to validate rejection.
+# shellcheck disable=SC2034
 declare -A __mktext_collision=()
 if mktext get __mktext_collision TITLE >/dev/null 2>&1; then
   status=0
