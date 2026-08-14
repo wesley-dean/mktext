@@ -37,15 +37,35 @@ The maintained implementation lives at `src/mktext.bash`.
 dist/mktext.bash
 ```
 
-The generated artifact is mode `0755` and embeds its semantic version,
-source-revision timestamp, and source commit.  `dist/` is generated output and
-is not maintained as a second source copy.
+The generated artifact is executable and sourceable.  It begins with an
+`#!/usr/bin/env bash` interpreter directive, is created with mode `0755`, and
+embeds its semantic version, source-revision timestamp, and source commit.
+`dist/` is generated output and is not maintained as a second source copy.
 
-Source the release artifact from a supported Bash process:
+Help and version information can be inspected directly without sourcing the
+library:
+
+```bash
+./dist/mktext.bash --help
+./dist/mktext.bash --version
+```
+
+The equivalent word forms are also available:
+
+```bash
+./dist/mktext.bash help
+./dist/mktext.bash version
+```
+
+Source the release artifact when using caller-owned associative-array contexts:
 
 ```bash
 . ./dist/mktext.bash
 ```
+
+Context operations execute in the current shell because Bash associative arrays
+are shell state and cannot be exported to a child process as ordinary environment
+variables.
 
 Published consumers should pin the `mktext.bash` asset from a tagged GitHub
 release rather than depending on the moving `main` branch.
@@ -111,7 +131,8 @@ the private `__mktext_` prefix.  Readonly associative arrays may be used with
 Invalid operation names, missing operations, and wrong argument counts return
 status 2 and print a concise diagnostic followed by usage information to
 standard error.  Explicit help requests print usage to standard output and
-return 0.
+return 0.  When the distribution artifact is executed directly, its process exit
+status is the status produced by the same `mktext` dispatcher.
 
 ## Macro Grammar
 
