@@ -26,6 +26,14 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
 
+      - name: Install validation dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes bats shellcheck
+
+      - name: Validate release artifact
+        run: make all
+
       - name: calculate version
         id: calculate-version
         uses: bitshifted/git-auto-semver@c4e8f005e839f822325356f141939cf6c76b5701 # pin@v1
@@ -51,3 +59,4 @@ jobs:
           tag_name: "v${{ steps.calculate-version.outputs.version-string }}"
           draft: false
           prerelease: false
+          files: mktext.bash
