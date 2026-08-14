@@ -32,7 +32,7 @@ jobs:
           sudo apt-get install --yes bats shellcheck
 
       - name: Validate distribution pipeline before versioning
-        run: make all VERSION=0.0.0-ci
+        run: make check test VERSION=0.0.0-ci
 
       - name: calculate version
         id: calculate-version
@@ -42,8 +42,11 @@ jobs:
           initial_version: 0.0.1
           tag_prefix: v
 
-      - name: Build and validate release artifact
+      - name: Build release artifact
         run: make all VERSION="${{ steps.calculate-version.outputs.version-string }}"
+
+      - name: Validate release artifact
+        run: make test-dist VERSION="${{ steps.calculate-version.outputs.version-string }}"
 
       - name: Generate release notes
         id: release-notes
