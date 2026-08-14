@@ -4,6 +4,14 @@ setup() {
   # shellcheck source=../mktext.bash
   source "${BATS_TEST_DIRNAME}/../mktext.bash"
   declare -gA context=()
+  TEST_TMPDIR="${BATS_TMPDIR:-/tmp}/mktext-${BATS_TEST_NUMBER:-$$}"
+
+  rm -rf "${TEST_TMPDIR}"
+  mkdir -p "${TEST_TMPDIR}"
+}
+
+teardown() {
+  rm -rf "${TEST_TMPDIR}"
 }
 
 @test "set and get normalize keys to uppercase" {
@@ -164,68 +172,68 @@ setup() {
 
 @test "render preserves an unterminated final line" {
   mktext set context TITLE 'Example'
-  printf '%s' '{TITLE}' >"${BATS_TEST_TMPDIR}/input"
-  printf '%s' 'Example' >"${BATS_TEST_TMPDIR}/expected"
+  printf '%s' '{TITLE}' >"${TEST_TMPDIR}/input"
+  printf '%s' 'Example' >"${TEST_TMPDIR}/expected"
 
-  mktext render context <"${BATS_TEST_TMPDIR}/input" >"${BATS_TEST_TMPDIR}/actual"
-  run cmp "${BATS_TEST_TMPDIR}/expected" "${BATS_TEST_TMPDIR}/actual"
+  mktext render context <"${TEST_TMPDIR}/input" >"${TEST_TMPDIR}/actual"
+  run cmp "${TEST_TMPDIR}/expected" "${TEST_TMPDIR}/actual"
 
   [ "${status}" -eq 0 ]
 }
 
 @test "render preserves a terminated final line" {
   mktext set context TITLE 'Example'
-  printf '%s\n' '{TITLE}' >"${BATS_TEST_TMPDIR}/input"
-  printf '%s\n' 'Example' >"${BATS_TEST_TMPDIR}/expected"
+  printf '%s\n' '{TITLE}' >"${TEST_TMPDIR}/input"
+  printf '%s\n' 'Example' >"${TEST_TMPDIR}/expected"
 
-  mktext render context <"${BATS_TEST_TMPDIR}/input" >"${BATS_TEST_TMPDIR}/actual"
-  run cmp "${BATS_TEST_TMPDIR}/expected" "${BATS_TEST_TMPDIR}/actual"
+  mktext render context <"${TEST_TMPDIR}/input" >"${TEST_TMPDIR}/actual"
+  run cmp "${TEST_TMPDIR}/expected" "${TEST_TMPDIR}/actual"
 
   [ "${status}" -eq 0 ]
 }
 
 @test "render preserves blank lines and empty input" {
   mktext set context TITLE 'Example'
-  printf 'a\n\n{TITLE}\n' >"${BATS_TEST_TMPDIR}/input"
-  printf 'a\n\nExample\n' >"${BATS_TEST_TMPDIR}/expected"
+  printf 'a\n\n{TITLE}\n' >"${TEST_TMPDIR}/input"
+  printf 'a\n\nExample\n' >"${TEST_TMPDIR}/expected"
 
-  mktext render context <"${BATS_TEST_TMPDIR}/input" >"${BATS_TEST_TMPDIR}/actual"
-  run cmp "${BATS_TEST_TMPDIR}/expected" "${BATS_TEST_TMPDIR}/actual"
+  mktext render context <"${TEST_TMPDIR}/input" >"${TEST_TMPDIR}/actual"
+  run cmp "${TEST_TMPDIR}/expected" "${TEST_TMPDIR}/actual"
   [ "${status}" -eq 0 ]
 
-  : >"${BATS_TEST_TMPDIR}/input"
-  mktext render context <"${BATS_TEST_TMPDIR}/input" >"${BATS_TEST_TMPDIR}/actual"
-  [ ! -s "${BATS_TEST_TMPDIR}/actual" ]
+  : >"${TEST_TMPDIR}/input"
+  mktext render context <"${TEST_TMPDIR}/input" >"${TEST_TMPDIR}/actual"
+  [ ! -s "${TEST_TMPDIR}/actual" ]
 }
 
 @test "render preserves CRLF line endings" {
   mktext set context TITLE 'Example'
-  printf 'x\r\n{TITLE}\r\n' >"${BATS_TEST_TMPDIR}/input"
-  printf 'x\r\nExample\r\n' >"${BATS_TEST_TMPDIR}/expected"
+  printf 'x\r\n{TITLE}\r\n' >"${TEST_TMPDIR}/input"
+  printf 'x\r\nExample\r\n' >"${TEST_TMPDIR}/expected"
 
-  mktext render context <"${BATS_TEST_TMPDIR}/input" >"${BATS_TEST_TMPDIR}/actual"
-  run cmp "${BATS_TEST_TMPDIR}/expected" "${BATS_TEST_TMPDIR}/actual"
+  mktext render context <"${TEST_TMPDIR}/input" >"${TEST_TMPDIR}/actual"
+  run cmp "${TEST_TMPDIR}/expected" "${TEST_TMPDIR}/actual"
 
   [ "${status}" -eq 0 ]
 }
 
 @test "replacement values may contain newlines" {
   mktext set context MULTI $'one\ntwo'
-  printf '%s' 'x{MULTI}y' >"${BATS_TEST_TMPDIR}/input"
-  printf 'xone\ntwoy' >"${BATS_TEST_TMPDIR}/expected"
+  printf '%s' 'x{MULTI}y' >"${TEST_TMPDIR}/input"
+  printf 'xone\ntwoy' >"${TEST_TMPDIR}/expected"
 
-  mktext render context <"${BATS_TEST_TMPDIR}/input" >"${BATS_TEST_TMPDIR}/actual"
-  run cmp "${BATS_TEST_TMPDIR}/expected" "${BATS_TEST_TMPDIR}/actual"
+  mktext render context <"${TEST_TMPDIR}/input" >"${TEST_TMPDIR}/actual"
+  run cmp "${TEST_TMPDIR}/expected" "${TEST_TMPDIR}/actual"
 
   [ "${status}" -eq 0 ]
 }
 
 @test "get preserves embedded and trailing newlines in a stored value" {
   mktext set context MULTI $'one\ntwo\n'
-  printf 'one\ntwo\n' >"${BATS_TEST_TMPDIR}/expected"
+  printf 'one\ntwo\n' >"${TEST_TMPDIR}/expected"
 
-  mktext get context MULTI >"${BATS_TEST_TMPDIR}/actual"
-  run cmp "${BATS_TEST_TMPDIR}/expected" "${BATS_TEST_TMPDIR}/actual"
+  mktext get context MULTI >"${TEST_TMPDIR}/actual"
+  run cmp "${TEST_TMPDIR}/expected" "${TEST_TMPDIR}/actual"
 
   [ "${status}" -eq 0 ]
 }
