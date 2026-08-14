@@ -14,7 +14,9 @@
 ## A generated distribution artifact may initialize the private metadata
 ## variables before this maintained source is copied into it.  The defaults below
 ## keep `src/mktext.bash` directly sourceable during development without runtime
-## Git, clock, or network access.
+## Git, clock, or network access.  The generated artifact also provides the
+## interpreter directive and executable permission used for direct informational
+## invocation.
 ##
 ## @par Examples
 ## @code
@@ -470,3 +472,18 @@ mktext() {
 
   return 2
 }
+
+## @brief Dispatches process arguments only when this file is executed directly.
+## @details
+## A generated `dist/mktext.bash` artifact is both sourceable and executable.
+## `BASH_SOURCE[0]` differs from `$0` when sourced, so this guard leaves the
+## caller's shell untouched in library mode.  When executed, the same public
+## dispatcher handles the process arguments and its return status becomes the
+## process exit status.
+if [[ ${BASH_SOURCE[0]} == "$0" ]]; then
+  if mktext "$@"; then
+    exit 0
+  else
+    exit $?
+  fi
+fi
