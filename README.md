@@ -31,15 +31,15 @@ does not claim binary-safe behavior.
 
 The maintained implementation lives at `src/mktext.bash`.
 
-`make build` generates the canonical consumer artifact:
+`make build` or `make all` generates the canonical consumer artifact:
 
 ```text
 dist/mktext.bash
 ```
 
-The generated artifact embeds its semantic version, source-revision timestamp,
-and source commit.  `dist/` is generated output and is not maintained as a
-second source copy.
+The generated artifact is mode `0755` and embeds its semantic version,
+source-revision timestamp, and source commit.  `dist/` is generated output and
+is not maintained as a second source copy.
 
 Source the release artifact from a supported Bash process:
 
@@ -184,15 +184,19 @@ The project follows documentation-driven, test-second development.
 Common development tasks are exposed through Make targets:
 
 ```bash
-make build
-make check
-make format
-make test
+make all          # build dist/mktext.bash only
+make build        # build dist/mktext.bash only
+make check        # syntax and static analysis
+make test         # test maintained source and generated distribution
 make test-source
 make test-dist
+make format
 make docs
-make all
 ```
+
+`make all` intentionally performs only the build.  Validation remains explicit
+through `make check` and `make test` so callers can build the artifact without
+also invoking the development test toolchain.
 
 `make test` exercises the public behavior suite against both the maintained
 source and the generated distribution artifact.
