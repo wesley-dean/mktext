@@ -256,3 +256,19 @@ teardown() {
   [ "${status}" -eq 3 ]
   [[ "${output}" == *'read-only'* ]]
 }
+
+@test "get returns four when Bash reports a recoverable output failure" {
+  [ -e /dev/full ] || skip '/dev/full is unavailable on this platform'
+
+  run bash -c 'source "$1"; declare -A c=([TITLE]="Example"); mktext get c TITLE >/dev/full' _ "${BATS_TEST_DIRNAME}/../mktext.bash"
+
+  [ "${status}" -eq 4 ]
+}
+
+@test "render returns four when Bash reports a recoverable output failure" {
+  [ -e /dev/full ] || skip '/dev/full is unavailable on this platform'
+
+  run bash -c 'source "$1"; declare -A c=([TITLE]="Example"); printf "%s" "{TITLE}" | mktext render c >/dev/full' _ "${BATS_TEST_DIRNAME}/../mktext.bash"
+
+  [ "${status}" -eq 4 ]
+}
