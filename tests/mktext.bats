@@ -54,11 +54,8 @@ teardown() {
 @test "unset is idempotent" {
   mktext set context TITLE 'Example'
 
-  run mktext unset context title
-  [ "${status}" -eq 0 ]
-
-  run mktext unset context title
-  [ "${status}" -eq 0 ]
+  mktext unset context title
+  mktext unset context title
 
   run mktext exists context title
   [ "${status}" -eq 1 ]
