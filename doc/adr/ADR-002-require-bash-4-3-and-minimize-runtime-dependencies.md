@@ -4,7 +4,7 @@ Date: 2026-08-14
 
 ## Status
 
-Proposed
+Accepted
 
 ## Intent and Documentation Posture
 
