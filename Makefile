@@ -10,6 +10,8 @@ SHELL := /bin/bash
 LIBRARY := mktext.bash
 TESTS_DIR := tests
 TEST_SCRIPTS := $(TESTS_DIR)/*.bats
+COMPAT_TEST := $(TESTS_DIR)/compat-bash.bash
+SHELL_SCRIPTS := $(LIBRARY) $(COMPAT_TEST)
 VENDOR_DIR := vendor
 DOXYGEN_BASH_FILTER := $(VENDOR_DIR)/doxygen-bash.awk
 DOXYGEN_BASH_FILTER_URL := https://raw.githubusercontent.com/wesley-dean/bash-doxygen/refs/heads/main/doxygen-bash.awk
@@ -20,23 +22,24 @@ REFERENCE_DOC_DIR := doc/reference
 all: check test
 
 ##
-# Validate the maintained Bash library with the shell parser and ShellCheck.
+# Validate maintained Bash source with the shell parser and ShellCheck.
 #
 check:
-	bash -n "$(LIBRARY)"
-	shellcheck "$(LIBRARY)"
+	bash -n $(SHELL_SCRIPTS)
+	shellcheck $(SHELL_SCRIPTS)
 
 ##
-# Format the maintained Bash library using the repository's canonical formatter.
+# Format maintained Bash source using the repository's canonical formatter.
 #
 format:
-	shfmt -w -i 2 -ci "$(LIBRARY)"
+	shfmt -w -i 2 -ci $(SHELL_SCRIPTS)
 
 ##
-# Run the public behavior suite against the sourceable release artifact.
+# Run the public behavior suite and the Bash-only compatibility smoke checks.
 #
 test:
 	bats $(TEST_SCRIPTS)
+	bash $(COMPAT_TEST)
 
 ##
 # Download the Bash Doxygen filter used to preprocess shell source files.

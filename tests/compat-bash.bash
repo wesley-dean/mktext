@@ -1,0 +1,165 @@
+#!/usr/bin/env bash
+
+# Minimal runtime-compatibility checks that intentionally depend only on Bash.
+# This file is executed under the project's minimum supported Bash release in
+# CI, where Bats and the rest of the development toolchain are not required.
+
+set -u
+set -o pipefail
+
+failures=0
+
+check_equal() {
+  local expected
+  local actual
+  local label
+
+  expected="$1"
+  actual="$2"
+  label="$3"
+
+  if [[ ${actual} == "${expected}" ]]; then
+    return 0
+  fi
+
+  printf 'FAIL: %s\n  expected: %q\n  actual:   %q\n' \
+    "${label}" "${expected}" "${actual}" >&2
+  failures=$((failures + 1))
+}
+
+check_status() {
+  local expected
+  local actual
+  local label
+
+  expected="$1"
+  actual="$2"
+  label="$3"
+
+  if [[ ${actual} -eq ${expected} ]]; then
+    return 0
+  fi
+
+  printf 'FAIL: %s\n  expected status: %s\n  actual status:   %s\n' \
+    "${label}" "${expected}" "${actual}" >&2
+  failures=$((failures + 1))
+}
+
+capture() {
+  local __compat_output_name
+  local __compat_status_name
+  local __compat_value
+  local __compat_status
+
+  __compat_output_name="$1"
+  __compat_status_name="$2"
+  shift 2
+
+  if __compat_value="$("$@")"; then
+    __compat_status=0
+  else
+    __compat_status=$?
+  fi
+
+  printf -v "${__compat_output_name}" '%s' "${__compat_value}"
+  printf -v "${__compat_status_name}" '%s' "${__compat_status}"
+}
+
+if (( BASH_VERSINFO[0] < 4 || (BASH_VERSINFO[0] == 4 && BASH_VERSINFO[1] < 3) )); then
+  printf 'FAIL: compatibility harness requires Bash 4.3 or newer; found %s\n' \
+    "${BASH_VERSION}" >&2
+  exit 1
+fi
+
+# shellcheck source=../mktext.bash
+source ./mktext.bash
+
+declare -A context=()
+
+if ! mktext set context title 'Example'; then
+  printf 'FAIL: set rejected a valid associative-array context\n' >&2
+  failures=$((failures + 1))
+fi
+
+output=''
+status=0
+capture output status mktext get context TITLE
+check_status 0 "${status}" 'get existing key'
+check_equal 'Example' "${output}" 'get existing key value'
+
+if mktext exists context title; then
+  status=0
+else
+  status=$?
+fi
+check_status 0 "${status}" 'exists existing key'
+
+if mktext exists context missing; then
+  status=0
+else
+  status=$?
+fi
+check_status 1 "${status}" 'exists absent key'
+
+rendered=''
+status=0
+capture rendered status bash -c \
+  'source ./mktext.bash; declare -A c=([TITLE]="Example"); printf "%s" "{TITLE}/{ title }" | mktext render c'
+check_status 0 "${status}" 'render recognized macros'
+check_equal 'Example/Example' "${rendered}" 'render recognized macros output'
+
+rendered=''
+status=0
+capture rendered status bash -c \
+  'source ./mktext.bash; declare -A c=([A]="{B}" [B]="expanded"); printf "%s" "{A}" | mktext render c'
+check_status 0 "${status}" 'nonrecursive render status'
+check_equal '{B}' "${rendered}" 'nonrecursive render output'
+
+rendered=''
+status=0
+capture rendered status bash -c \
+  'source ./mktext.bash; declare -A c=([TITLE]="changed"); printf "%s" '\''${TITLE} {{TITLE}} {bad key} {UNKNOWN}'\'' | mktext render c'
+check_status 0 "${status}" 'literal preservation status'
+check_equal '${TITLE} {{TITLE}} {bad key} {UNKNOWN}' "${rendered}" \
+  'literal preservation output'
+
+if ! mktext unset context title; then
+  printf 'FAIL: unset rejected a valid writable context\n' >&2
+  failures=$((failures + 1))
+fi
+
+if mktext exists context title; then
+  status=0
+else
+  status=$?
+fi
+check_status 1 "${status}" 'unset removes key'
+
+declare -Ar readonly_context=([TITLE]='Readonly')
+output=''
+status=0
+capture output status mktext get readonly_context TITLE
+check_status 0 "${status}" 'readonly context get status'
+check_equal 'Readonly' "${output}" 'readonly context get value'
+
+if mktext set readonly_context TITLE changed >/dev/null 2>&1; then
+  status=0
+else
+  status=$?
+fi
+check_status 3 "${status}" 'readonly context mutation status'
+
+declare -A __mktext_collision=()
+if mktext get __mktext_collision TITLE >/dev/null 2>&1; then
+  status=0
+else
+  status=$?
+fi
+check_status 3 "${status}" 'reserved private context prefix'
+
+if (( failures != 0 )); then
+  printf 'Bash %s compatibility: %s failure(s)\n' "${BASH_VERSION}" "${failures}" >&2
+  exit 1
+fi
+
+printf 'Bash %s compatibility checks passed\n' "${BASH_VERSION}"

@@ -17,7 +17,7 @@ concurrency:
 
 jobs:
   test:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # pin@v4
@@ -29,3 +29,17 @@ jobs:
 
       - name: Run project validation
         run: make all
+
+  bash-4-3:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # pin@v4
+
+      - name: Verify minimum Bash version
+        run: |
+          docker run --rm \
+            --volume "${GITHUB_WORKSPACE}:/work:ro" \
+            --workdir /work \
+            bash:4.3 \
+            bash tests/compat-bash.bash
