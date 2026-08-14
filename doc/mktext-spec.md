@@ -154,8 +154,9 @@ When the normalized key exists, `get` SHALL:
 
 - write the exact stored value to standard output;
 - add no newline or other delimiter;
-- return status 0;
-- write nothing to standard error.
+- return status 0 when the complete value is written;
+- return status 4 if standard output cannot accept the complete value;
+- write nothing to standard error for a normal successful or absent lookup.
 
 When the normalized key does not exist, `get` SHALL:
 
@@ -369,6 +370,9 @@ Replacement values may themselves contain newline characters.  Those newlines
 are intentional output data and do not change the fact that template scanning is
 line-local.
 
+If the input stream cannot be read completely or standard output cannot accept
+the complete rendered data, `render` SHALL return status 4.
+
 ## Standard Streams
 
 Standard output is reserved for operation data:
@@ -392,8 +396,11 @@ The public status meanings are:
 1  requested key is absent for get/exists
 2  invalid operation name, arity, or other API usage
 3  invalid context reference, readonly mutation, or invalid key
-4  rendering input/output failure
+4  data input/output failure
 ```
+
+Status 4 applies when public data cannot be transferred completely, including a
+failed `get` write or a `render` input/output failure.
 
 No other public status meaning is defined for v1.
 

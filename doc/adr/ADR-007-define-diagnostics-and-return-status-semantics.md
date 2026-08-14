@@ -9,7 +9,7 @@ Proposed
 ## Intent and Documentation Posture
 
 This ADR defines how a sourced `mktext` library communicates success, negative
-queries, caller errors, and rendering failures.
+queries, caller errors, and data input/output failures.
 
 ## Context
 
@@ -22,13 +22,16 @@ status meant an error, callers would need textual output or another side channel
 to ask whether a key is absent.
 
 Rendered data and `get` values use standard output, so diagnostics must use a
-different stream to avoid corrupting caller data.
+different stream to avoid corrupting caller data.  Writes to that data stream
+can also fail independently of API validation, so the status contract needs one
+small I/O-failure category that applies wherever public data is transferred.
 
 ## Decision Drivers
 
 - Preserve standard output for data.
 - Make membership tests natural in Bash conditionals.
 - Distinguish a normal negative lookup from invalid API usage.
+- Distinguish API failures from failures while reading or writing public data.
 - Keep the status model small enough to remember and document.
 - Never `exit` from a sourced library for ordinary errors.
 
@@ -42,22 +45,23 @@ The public return-status contract SHALL be:
 0  operation succeeded, or a predicate is true
 1  requested key is absent for get/exists
 2  invalid operation name, arity, or other API usage
-3  invalid context reference or invalid key
-4  rendering input/output failure
+3  invalid context reference, readonly mutation, or invalid key
+4  data input/output failure
 ```
 
 Specific operation rules are:
 
 - `set` returns 0 after storing the value;
-- `get` returns 0 and writes the exact value when present, or returns 1 and
-  writes nothing when absent;
+- `get` returns 0 and writes the exact value when present, returns 1 and writes
+  nothing when absent, or returns 4 if the value cannot be written completely;
 - `exists` returns 0 when present and 1 when absent, with no standard output;
-- `unset` is idempotent and returns 0 for a valid context/key whether or not the
-  key previously existed;
+- `unset` is idempotent and returns 0 for a valid writable context/key whether
+  or not the key previously existed;
 - `render` returns 0 when the complete input stream is rendered according to the
-  defined grammar, including when unknown macros are preserved;
-- invalid operations, argument counts, contexts, or keys produce concise
-  diagnostics and the corresponding status above.
+  defined grammar, including when unknown macros are preserved, or returns 4 if
+  input or output I/O prevents complete rendering;
+- invalid operations, argument counts, contexts, readonly mutations, or keys
+  produce concise diagnostics and the corresponding status above.
 
 The library SHALL use `return`, not `exit`, for its public error paths.
 
@@ -74,6 +78,13 @@ key from malformed API usage or an invalid context.
 
 Highly granular statuses would allow detailed automation, but the compatibility
 cost would exceed the value for this small library.
+
+### Give get and render separate I/O codes
+
+The caller may care that public data could not be transferred completely, but
+separate numeric categories for each operation would add compatibility surface
+without changing the caller's practical recovery options.  One data-I/O
+category is sufficient.
 
 ### Print missing-key diagnostics from `get`
 
@@ -95,16 +106,17 @@ if mktext exists context TITLE; then
 fi
 ```
 
-Callers that care about the difference between absence and misuse can inspect
-statuses greater than 1.
+Callers that care about the difference between absence, misuse, invalid state,
+and incomplete data transfer can distinguish those categories without parsing
+human-readable diagnostics.
 
 These numeric meanings are part of the public API and require compatibility
 consideration if changed.
 
 ## Open Questions and Follow-Ups
 
-The implementation must define what constitutes an I/O failure in terms Bash
-can observe reliably.  Tests should cover broken-output cases when practical.
+Tests should cover observable broken-input and broken-output behavior when the
+host shell can exercise those conditions reliably.
 
 ## Related Decisions
 

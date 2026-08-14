@@ -131,7 +131,7 @@ The public status contract is:
 1  requested key is absent for get/exists
 2  invalid operation name, arity, or other API usage
 3  invalid context reference, readonly mutation, or invalid key
-4  rendering input/output failure
+4  data input/output failure
 ```
 
 Diagnostics are written to standard error.  Rendered data and `get` values use
