@@ -86,6 +86,7 @@ if [[ ${output} != Usage:* || ${output} != *'mktext version'* ]]; then
   printf 'FAIL: help output did not contain the expected usage surface\n' >&2
   failures=$((failures + 1))
 fi
+help_output="${output}"
 
 output=''
 status=0
@@ -95,6 +96,7 @@ if [[ ${output} != mktext\ *$'\n'build_date=* || ${output} != *$'\n'commit=* ]];
   printf 'FAIL: version output did not contain three metadata lines\n' >&2
   failures=$((failures + 1))
 fi
+version_output="${output}"
 
 if mktext foobar >/dev/null 2>&1; then
   status=0
@@ -102,6 +104,53 @@ else
   status=$?
 fi
 check_status 2 "${status}" 'unknown operation status'
+
+# Generated distribution artifacts are executable as well as sourceable.  The
+# maintained source normally lacks executable mode, so these checks apply only
+# when the selected target advertises direct execution.
+if [[ -x ${MKTEXT_LIBRARY} ]]; then
+  first_line=''
+  IFS= read -r first_line <"${MKTEXT_LIBRARY}" || :
+  check_equal '#!/usr/bin/env bash' "${first_line}" 'distribution interpreter directive'
+
+  output=''
+  status=0
+  capture output status "${MKTEXT_LIBRARY}" --help
+  check_status 0 "${status}" 'direct --help status'
+  check_equal "${help_output}" "${output}" 'direct --help output'
+
+  output=''
+  status=0
+  capture output status "${MKTEXT_LIBRARY}" help
+  check_status 0 "${status}" 'direct help status'
+  check_equal "${help_output}" "${output}" 'direct help output'
+
+  output=''
+  status=0
+  capture output status "${MKTEXT_LIBRARY}" --version
+  check_status 0 "${status}" 'direct --version status'
+  check_equal "${version_output}" "${output}" 'direct --version output'
+
+  output=''
+  status=0
+  capture output status "${MKTEXT_LIBRARY}" version
+  check_status 0 "${status}" 'direct version status'
+  check_equal "${version_output}" "${output}" 'direct version output'
+
+  if "${MKTEXT_LIBRARY}" foobar >/dev/null 2>&1; then
+    status=0
+  else
+    status=$?
+  fi
+  check_status 2 "${status}" 'direct unknown operation status'
+
+  if "${MKTEXT_LIBRARY}" >/dev/null 2>&1; then
+    status=0
+  else
+    status=$?
+  fi
+  check_status 2 "${status}" 'direct missing operation status'
+fi
 
 # Context variables are consumed indirectly by name through the public API.
 # shellcheck disable=SC2034
