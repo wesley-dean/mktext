@@ -69,6 +69,10 @@ mktext unset CONTEXT KEY
 mktext render CONTEXT
 ```
 
+Context variable names must be legal Bash identifiers and must not begin with
+the private `__mktext_` prefix.  Readonly associative arrays may be used with
+`get`, `exists`, and `render`; mutating operations reject them.
+
 ## Macro Grammar
 
 Keys use this grammar before case normalization:
@@ -126,7 +130,7 @@ The public status contract is:
 0  success, or a predicate is true
 1  requested key is absent for get/exists
 2  invalid operation name, arity, or other API usage
-3  invalid context reference or invalid key
+3  invalid context reference, readonly mutation, or invalid key
 4  rendering input/output failure
 ```
 

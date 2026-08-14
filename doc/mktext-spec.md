@@ -39,6 +39,9 @@ mktext
 Other functions, variables, or implementation details are private unless a
 future public specification explicitly defines them otherwise.
 
+Private implementation variables and helper functions use the `__mktext_`
+prefix.  Caller context variables SHALL NOT use that reserved prefix.
+
 The public operation forms are:
 
 ```text
@@ -74,11 +77,18 @@ A context name SHALL first be validated as a legal Bash identifier:
 [A-Za-z_][A-Za-z0-9_]*
 ```
 
-The referenced variable SHALL then be verified to exist as an associative
-array before the implementation creates or uses a nameref for it.
+A context name beginning with `__mktext_` is reserved for private library state
+and SHALL fail validation with status 3.
+
+The referenced variable SHALL then be verified to exist as an associative array
+before the implementation creates or uses a nameref for it.
 
 An invalid context name, a missing variable, or a variable of the wrong type
 SHALL fail with status 3 and a diagnostic on standard error.
+
+Readonly associative arrays are valid contexts for `get`, `exists`, and
+`render`.  `set` and `unset` SHALL reject readonly contexts with status 3 and a
+diagnostic before attempting a Bash mutation.
 
 The library SHALL NOT create an implicit default context.
 
@@ -124,6 +134,8 @@ The empty string is a valid value.
 
 Embedded newline characters are valid value content.
 
+A readonly context SHALL be rejected with status 3 before mutation.
+
 On success, `set` SHALL:
 
 - return status 0;
@@ -151,6 +163,8 @@ When the normalized key does not exist, `get` SHALL:
 - return status 1;
 - treat absence as a normal negative result and emit no diagnostic.
 
+Readonly contexts are valid for `get`.
+
 ### exists
 
 Invocation:
@@ -168,6 +182,8 @@ queries.
 
 An empty string value still counts as an existing key.
 
+Readonly contexts are valid for `exists`.
+
 ### unset
 
 Invocation:
@@ -180,6 +196,8 @@ mktext unset CONTEXT KEY
 
 `unset` SHALL be idempotent.  A valid request for an already-absent key SHALL
 still return 0.
+
+A readonly context SHALL be rejected with status 3 before mutation.
 
 On success, `unset` SHALL write nothing to standard output or standard error.
 
@@ -236,6 +254,8 @@ mktext render CONTEXT
 
 `render` SHALL read template text from standard input and write rendered text to
 standard output.
+
+Readonly contexts are valid for `render`.
 
 The v1 API SHALL NOT accept a template filename argument.  Callers may use shell
 redirection or pipelines.
@@ -371,7 +391,7 @@ The public status meanings are:
 0  operation succeeded, or a predicate is true
 1  requested key is absent for get/exists
 2  invalid operation name, arity, or other API usage
-3  invalid context reference or invalid key
+3  invalid context reference, readonly mutation, or invalid key
 4  rendering input/output failure
 ```
 
@@ -416,7 +436,8 @@ The following are public compatibility surfaces:
 
 - the public `mktext` function name;
 - operation names and arity;
-- context requirements;
+- context requirements and the reserved private prefix;
+- readonly-context mutation behavior;
 - key grammar and normalization;
 - macro grammar;
 - literal and nonrecursive rendering semantics;

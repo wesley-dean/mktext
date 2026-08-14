@@ -27,12 +27,23 @@ operations and left `unset` unresolved.  Context removal is a fundamental map
 operation and can be provided without expanding rendering semantics, so the v1
 API includes it.
 
+Bash dynamic scoping introduces one additional constraint.  Private local
+variables can shadow caller variables with the same name.  The implementation
+therefore reserves a private variable prefix so a nameref can be created only
+after the caller's context is known not to collide with library internals.
+
+Readonly associative arrays introduce a second constraint.  Bash can terminate
+a shell on an attempted assignment to a readonly nameref target, so mutating
+operations must reject readonly contexts before performing a write.
+
 ## Decision Drivers
 
 - Keep the public namespace small.
 - Use native Bash data structures rather than inventing a context format.
 - Permit callers to maintain more than one independent context.
 - Validate context references before using namerefs.
+- Avoid dynamic-scope collisions with private library variables.
+- Fail predictably before attempting writes to readonly contexts.
 - Provide a complete minimal map API without exposing private helpers.
 
 ## Decision
@@ -59,6 +70,12 @@ declare -A context=()
 Before creating a nameref, `mktext` SHALL validate that the supplied context
 name is a legal Bash identifier and that the referenced variable exists as an
 associative array.
+
+Context names beginning with `__mktext_` SHALL be reserved for private library
+state and rejected as public context names.
+
+Readonly associative arrays SHALL be valid for `get`, `exists`, and `render`.
+`set` and `unset` SHALL reject a readonly context before attempting a mutation.
 
 Operation semantics are:
 
@@ -95,6 +112,18 @@ independent contexts and introduce hidden mutable state.
 This avoids a persistent context but makes quoting, empty values, repeated
 renders, and larger contexts cumbersome.
 
+### Permit contexts to use the private prefix
+
+Any fixed private local name can collide with a dynamically scoped caller
+variable.  Reserving one clearly documented prefix makes that boundary
+predictable instead of relying on increasingly obscure internal names.
+
+### Attempt mutations against readonly contexts
+
+Bash's readonly assignment behavior can be fatal to the caller shell rather than
+merely returning a normal function error.  Pre-validation is therefore safer
+than delegating this case to the assignment operation.
+
 ### Omit `unset`
 
 Callers could use Bash's `unset` directly.  This was rejected because it would
@@ -108,8 +137,13 @@ The API is easy to vendor and document.
 Callers retain ownership of context lifetime and may inspect the associative
 array directly when debugging.
 
-Changing operation names, argument order, output behavior, or context semantics
-is a public compatibility change.
+The `__mktext_` context-name prefix is unavailable to callers because it belongs
+to the library's private namespace.
+
+Readonly contexts can safely participate in read-only workflows.
+
+Changing operation names, argument order, output behavior, reserved context
+namespace, or context semantics is a public compatibility change.
 
 ## Open Questions and Follow-Ups
 
