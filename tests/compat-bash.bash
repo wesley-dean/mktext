@@ -134,6 +134,9 @@ check_status 1 "${status}" 'exists absent key'
 
 rendered=''
 status=0
+# This single-quoted string is a literal program passed to bash -c; expansion is
+# intentionally deferred to that child shell.
+# shellcheck disable=SC2016
 capture rendered status bash -c \
   'source "$1"; declare -A c=([TITLE]="Example"); printf "%s" "{TITLE}/{ title }" | mktext render c' \
   _ "${MKTEXT_LIBRARY}"
@@ -142,6 +145,8 @@ check_equal 'Example/Example' "${rendered}" 'render recognized macros output'
 
 rendered=''
 status=0
+# The program is deliberately single-quoted for execution by the child shell.
+# shellcheck disable=SC2016
 capture rendered status bash -c \
   'source "$1"; declare -A c=([A]="{B}" [B]="expanded"); printf "%s" "{A}" | mktext render c' \
   _ "${MKTEXT_LIBRARY}"
