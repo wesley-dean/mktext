@@ -28,7 +28,7 @@ jobs:
           sudo apt-get install --yes bats shellcheck
 
       - name: Run project validation
-        run: make all
+        run: make check test
 
   bash-4-3:
     runs-on: ubuntu-24.04
@@ -37,7 +37,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # pin@v4
 
       - name: Build compatibility artifact
-        run: make build VERSION=0.0.0-ci
+        run: make all VERSION=0.0.0-ci
 
       - name: Verify minimum Bash version
         run: |
