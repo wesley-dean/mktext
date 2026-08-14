@@ -14,9 +14,10 @@ compatibility policy for `mktext`.
 ## Context
 
 `mktext` remains intentionally small and does not need Bootstrap's modular
-concatenation architecture.  However, the release artifact now has one concrete
-build-time responsibility that maintained source should not carry: immutable
-version and source-revision metadata.
+concatenation architecture.  However, the release artifact now has concrete
+build-time responsibilities that maintained source should not carry: immutable
+version and source-revision metadata, an executable entry point, and the
+consumer-facing interpreter directive.
 
 Keeping generated version strings, commit identifiers, and timestamps in the
 hand-maintained file would either require source edits for every release or
@@ -24,20 +25,29 @@ create multiple competing sources of truth.  A narrow source-to-distribution
 step lets the maintained implementation remain stable while the released file
 identifies exactly what produced it.
 
+The artifact is primarily a sourceable library because context operations depend
+on associative arrays in the caller's shell.  Context-free informational forms
+are also useful before a caller has sourced the library.  The same distribution
+file can provide both behaviors without introducing a second wrapper program.
+
 This revisits the initial Bootstrap ADR assessment for ADR-010.  The rejected
 part remains modular assembly for its own sake.  The newly demonstrated need is
-a deterministic distribution boundary for metadata injection, so the reusable
-portion of that decision now applies with substantial simplification.
+a deterministic distribution boundary for metadata injection and direct
+consumer invocation, so the reusable portion of that decision now applies with
+substantial simplification.
 
 ## Decision Drivers
 
 - Keep one human-maintained implementation file.
 - Keep one consumer-facing release artifact.
 - Embed release identity without editing source for every version.
+- Permit basic help and version discovery before sourcing the library.
+- Preserve the sourced function API for caller-owned associative-array state.
 - Derive release version from the existing semantic-version workflow.
 - Make local/development builds truthful and recognizable.
 - Keep build metadata deterministic for a given source revision and version.
-- Ensure the artifact users receive is exercised by automated tests.
+- Ensure the artifact users receive is exercised both as sourced code and as a
+  directly executed program.
 - Avoid importing Bootstrap's multi-module build complexity.
 
 ## Decision
@@ -58,10 +68,37 @@ dist/mktext.bash
 committed as a second source copy.  The repository SHALL ignore generated
 `dist/` contents.
 
-The build step SHALL remain intentionally narrow.  It SHALL prepend generated
-artifact metadata and then copy the maintained `src/mktext.bash` implementation
-without introducing a template language, transpiler, minifier, or modular source
-assembly requirement.
+The generated artifact SHALL be both sourceable and directly executable.  It
+SHALL be created with mode `0755` and SHALL begin with:
+
+```text
+#!/usr/bin/env bash
+```
+
+When `dist/mktext.bash` is sourced, it SHALL define the public `mktext` function
+without automatically dispatching arguments or terminating the caller's shell.
+
+When `dist/mktext.bash` is executed directly, it SHALL invoke the same public
+`mktext` dispatcher with the process arguments and SHALL terminate with the
+status produced by that dispatcher.  This direct-execution surface is intended
+primarily for context-free forms such as:
+
+```text
+dist/mktext.bash help
+dist/mktext.bash -h
+dist/mktext.bash --help
+dist/mktext.bash version
+dist/mktext.bash --version
+```
+
+Stateful context operations remain designed for sourced use because Bash
+associative-array contexts live in the caller's shell and are not transferable
+to a child process as ordinary exported environment state.
+
+The build step SHALL remain intentionally narrow.  It SHALL prepend the
+interpreter directive and generated artifact metadata and then copy the
+maintained `src/mktext.bash` implementation without introducing a template
+language, transpiler, minifier, or modular source assembly requirement.
 
 The generated artifact SHALL embed:
 
@@ -116,6 +153,9 @@ Public compatibility includes:
 - the `mktext` function and supported operation/informational forms;
 - argument ordering and context semantics;
 - help and version output contracts;
+- direct execution of the distribution artifact for context-free informational
+  forms;
+- executable mode and interpreter entry point of the distribution artifact;
 - macro grammar and normalization;
 - rendering and preservation behavior;
 - standard-stream behavior;
@@ -137,9 +177,18 @@ the library API.
 ### Keep maintained source and release artifact identical
 
 This was the initial v1 direction.  It minimizes build machinery, but version,
-commit, and revision-time metadata would then require release-time source edits
-or would be absent from the artifact.  The demonstrated provenance requirement
-now justifies a narrow generated distribution copy.
+commit, revision-time metadata, and the executable consumer entry point would
+then either require release-time source edits or would be absent from the
+artifact.  The demonstrated provenance and direct-invocation requirements now
+justify a narrow generated distribution copy.
+
+### Add a separate CLI wrapper
+
+A wrapper could provide help and version discovery while leaving the library
+purely sourceable.  That would create a second consumer artifact and another
+interface to version, publish, and document.  The generated artifact can safely
+distinguish direct execution from sourcing and reuse the existing dispatcher, so
+a second program is unnecessary.
 
 ### Reproduce Bootstrap's modular source assembly
 
@@ -172,13 +221,19 @@ Semantic Versioning.
 ## Consequences
 
 Maintainers edit one implementation file under `src/` while consumers receive one
-sourceable file under `dist/`.
+sourceable and executable file under `dist/`.
 
 A release artifact can identify its semantic version and source revision without
 runtime Git access or source inspection.
 
-The generated file becomes an object that must be validated, not merely a copy
-step assumed to be correct.
+A user can run the release artifact directly to discover usage and build identity
+before deciding whether or how to source it.
+
+Callers that use associative-array contexts continue to source the artifact so
+those operations execute in the shell that owns the context.
+
+The generated file becomes an object that must be validated in both sourced and
+direct-execution modes, not merely a copy step assumed to be correct.
 
 The build remains small enough to inspect directly and does not create pressure
 to split the implementation into modules prematurely.
