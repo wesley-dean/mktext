@@ -23,8 +23,9 @@ user-visible contracts.
 
 ADR-008 establishes a narrow generated distribution artifact.  That creates two
 important validation surfaces: the maintained source must remain directly
-usable for development, and the generated artifact must behave identically while
-also carrying the expected build metadata.
+usable for development, and the generated artifact must preserve the sourced
+library behavior while also carrying the expected build metadata and supporting
+its documented direct-execution interface.
 
 The design handoff selects Bats, ShellCheck, shfmt, and Doxygen-style
 documentation as the expected engineering toolchain.
@@ -37,8 +38,10 @@ documentation as the expected engineering toolchain.
 - Keep validation explicit rather than hiding tests behind a build target.
 - Protect public behavior rather than incidental implementation structure.
 - Keep the toolchain conventional for Bash.
-- Validate both maintained source and the exact sourceable artifact users receive.
+- Validate both maintained source and the exact sourceable/executable artifact
+  users receive.
 - Keep release metadata injection under automated regression coverage.
+- Exercise direct artifact invocation under the minimum supported Bash release.
 
 ## Decision
 
@@ -62,7 +65,7 @@ clean
 The exact underlying commands may evolve while target meanings remain stable.
 
 `build` SHALL generate `dist/mktext.bash` from `src/mktext.bash` with the metadata
-defined by ADR-008.
+and executable artifact properties defined by ADR-008.
 
 `all` SHALL be the default build target and SHALL produce the same distribution
 artifact as `build`.  It SHALL NOT implicitly run `check`, `test`, or other
@@ -74,13 +77,16 @@ Bats SHALL be the primary automated test framework.
 
 The primary behavior suite SHALL run against both `src/mktext.bash` and the
 generated `dist/mktext.bash`.  Tests SHALL exercise the public `mktext` function
-rather than depending on the path being tested.
+rather than depending on private helpers or incidental source structure.
 
-The suite SHALL cover, at minimum:
+The suite and compatibility checks SHALL cover, at minimum:
 
 - help aliases and usage output;
 - version aliases and embedded metadata output;
 - invalid-usage diagnostics and nonzero status;
+- direct execution of generated-artifact help and version forms;
+- direct-execution status propagation for missing or unknown operations;
+- generated-artifact executable mode and interpreter directive;
 - context validation;
 - key normalization and validation;
 - set/get/exists/unset semantics;
@@ -94,7 +100,9 @@ The suite SHALL cover, at minimum:
 
 The Bash-only compatibility harness SHALL be capable of exercising either the
 maintained source or generated artifact and SHALL be run under the minimum
-supported Bash release in CI.
+supported Bash release in CI.  When the selected target is the executable
+distribution artifact, that harness SHALL exercise the direct-execution surface
+as well as sourced-library behavior.
 
 Private helpers may receive direct tests when necessary for difficult logic, but
 such tests are exceptions rather than the default strategy.
@@ -133,6 +141,13 @@ That protects consumers but makes source-only development failures harder to
 localize and can hide assumptions that exist only because the build prelude is
 present.  Exercising both surfaces is inexpensive for this project.
 
+### Test the generated artifact only by sourcing it
+
+That would verify library semantics while missing defects in executable mode,
+interpreter placement, argument dispatch, and process-status propagation.  The
+distribution artifact is a documented executable surface, so direct execution
+must be exercised explicitly.
+
 ### Use a custom Bash task runner
 
 A project-specific task runner would duplicate a capability Make already
@@ -153,7 +168,8 @@ A contributor or CI job can reproduce validation explicitly with `make check`
 and `make test`.
 
 The same behavior suite protects maintained source and published distribution
-semantics.
+semantics, while compatibility checks also protect the executable distribution
+entry point.
 
 Refactoring internal helpers should not require rewriting most tests when public
 behavior remains unchanged.
