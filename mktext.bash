@@ -360,7 +360,7 @@ mktext() {
       return 1
       ;;
     unset)
-      unset "__mktext_context_ref[${__mktext_normalized}]"
+      unset "${__mktext_context_name}[${__mktext_normalized}]"
       return 0
       ;;
   esac
