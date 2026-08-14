@@ -28,7 +28,7 @@ BUILD_DATE ?= $(shell git show -s --format=%cI HEAD 2>/dev/null || printf 'unkno
 
 .PHONY: all build check clean docs docs-clean format test test-source test-dist
 
-all: check test
+all: build
 
 ##
 # Generate the sourceable distribution artifact with immutable build metadata.
@@ -50,7 +50,7 @@ build: $(SOURCE_LIBRARY)
 		printf '\n'; \
 		cat "$(SOURCE_LIBRARY)"; \
 	} >"$(DIST_LIBRARY).tmp"
-	chmod 0644 "$(DIST_LIBRARY).tmp"
+	chmod 0755 "$(DIST_LIBRARY).tmp"
 	mv "$(DIST_LIBRARY).tmp" "$(DIST_LIBRARY)"
 
 ##
@@ -87,6 +87,7 @@ test-source:
 #
 test-dist: build
 	bash -n "$(DIST_LIBRARY)"
+	test -x "$(DIST_LIBRARY)"
 	MKTEXT_LIBRARY="$(DIST_LIBRARY)" \
 		MKTEXT_EXPECT_VERSION="$(VERSION)" \
 		MKTEXT_EXPECT_BUILD_DATE="$(BUILD_DATE)" \
