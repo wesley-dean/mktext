@@ -12,18 +12,20 @@ CREATE_SUBDIRS         = NO
 GENERATE_HTML          = YES
 HTML_OUTPUT            = .
 GENERATE_LATEX         = NO
-GENERATE_MAN           = NO
+GENERATE_MAN            = NO
 GENERATE_RTF           = NO
 GENERATE_XML           = NO
 
-INPUT                  = mktext.bash
+INPUT                  = src/mktext.bash
 RECURSIVE              = NO
 FILE_PATTERNS          = *.bash
 
 EXCLUDE                = tests \
-                         vendor
+                         vendor \
+                         dist
 EXCLUDE_PATTERNS       = */tests/* \
-                         */vendor/*
+                         */vendor/* \
+                         */dist/*
 
 EXTENSION_MAPPING      = bash=C
 FILTER_PATTERNS        = *.bash=vendor/doxygen-bash.awk

@@ -31,8 +31,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install --yes bats shellcheck
 
-      - name: Validate release artifact
-        run: make all
+      - name: Validate distribution pipeline before versioning
+        run: make all VERSION=0.0.0-ci
 
       - name: calculate version
         id: calculate-version
@@ -41,6 +41,9 @@ jobs:
           create_tag: true
           initial_version: 0.0.1
           tag_prefix: v
+
+      - name: Build and validate release artifact
+        run: make all VERSION="${{ steps.calculate-version.outputs.version-string }}"
 
       - name: Generate release notes
         id: release-notes
@@ -59,4 +62,4 @@ jobs:
           tag_name: "v${{ steps.calculate-version.outputs.version-string }}"
           draft: false
           prerelease: false
-          files: mktext.bash
+          files: dist/mktext.bash

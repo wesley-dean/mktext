@@ -1,8 +1,16 @@
 #!/usr/bin/env bats
 
 setup() {
-  # shellcheck source=../mktext.bash
-  source "${BATS_TEST_DIRNAME}/../mktext.bash"
+  MKTEXT_LIBRARY="${MKTEXT_LIBRARY:-${BATS_TEST_DIRNAME}/../src/mktext.bash}"
+  MKTEXT_EXPECT_VERSION="${MKTEXT_EXPECT_VERSION:-0.0.0-dev}"
+  MKTEXT_EXPECT_BUILD_DATE="${MKTEXT_EXPECT_BUILD_DATE:-unknown}"
+  MKTEXT_EXPECT_BUILD_COMMIT="${MKTEXT_EXPECT_BUILD_COMMIT:-unknown}"
+
+  # The test target is selected dynamically so the same suite can verify source
+  # and the generated distribution artifact.
+  # shellcheck disable=SC1090
+  source "${MKTEXT_LIBRARY}"
+
   declare -gA context=()
   TEST_TMPDIR="${BATS_TMPDIR:-/tmp}/mktext-${BATS_TEST_NUMBER:-$$}"
 
@@ -12,6 +20,62 @@ setup() {
 
 teardown() {
   rm -rf "${TEST_TMPDIR}"
+}
+
+@test "help aliases print identical usage and return zero" {
+  run mktext help
+  [ "${status}" -eq 0 ]
+  help_output="${output}"
+  [[ "${help_output}" == Usage:* ]]
+  [[ "${help_output}" == *'mktext render CONTEXT'* ]]
+  [[ "${help_output}" == *'mktext version'* ]]
+  [[ "${help_output}" == *'-h, --help'* ]]
+  [[ "${help_output}" == *'--version'* ]]
+
+  run mktext -h
+  [ "${status}" -eq 0 ]
+  [ "${output}" = "${help_output}" ]
+
+  run mktext --help
+  [ "${status}" -eq 0 ]
+  [ "${output}" = "${help_output}" ]
+}
+
+@test "version aliases print embedded three-line metadata" {
+  expected="$(printf 'mktext %s\nbuild_date=%s\ncommit=%s' \
+    "${MKTEXT_EXPECT_VERSION}" \
+    "${MKTEXT_EXPECT_BUILD_DATE}" \
+    "${MKTEXT_EXPECT_BUILD_COMMIT}")"
+
+  run mktext version
+  [ "${status}" -eq 0 ]
+  [ "${output}" = "${expected}" ]
+
+  run mktext --version
+  [ "${status}" -eq 0 ]
+  [ "${output}" = "${expected}" ]
+}
+
+@test "invalid usage returns two and includes corrective usage" {
+  run mktext foobar
+  [ "${status}" -eq 2 ]
+  [[ "${output}" == *'mktext: unknown operation: foobar'* ]]
+  [[ "${output}" == *'Usage:'* ]]
+
+  run mktext
+  [ "${status}" -eq 2 ]
+  [[ "${output}" == *'mktext: expected an operation'* ]]
+  [[ "${output}" == *'Usage:'* ]]
+
+  run mktext render context extra
+  [ "${status}" -eq 2 ]
+  [[ "${output}" == *'mktext: render expects CONTEXT'* ]]
+  [[ "${output}" == *'Usage:'* ]]
+
+  run mktext --help extra
+  [ "${status}" -eq 2 ]
+  [[ "${output}" == *'does not accept arguments'* ]]
+  [[ "${output}" == *'Usage:'* ]]
 }
 
 @test "set and get normalize keys to uppercase" {
@@ -111,57 +175,49 @@ teardown() {
 @test "render replaces recognized macros case-insensitively" {
   mktext set context TITLE 'Example'
 
-  run bash -c 'source "$1"; declare -A c=([TITLE]="Example"); printf "%s" "{TITLE}/{ title }/{TiTlE}" | mktext render c' _ "${BATS_TEST_DIRNAME}/../mktext.bash"
+  run bash -c 'source "$1"; declare -A c=([TITLE]="Example"); printf "%s" "{TITLE}/{ title }/{TiTlE}" | mktext render c' _ "${MKTEXT_LIBRARY}"
 
   [ "${status}" -eq 0 ]
   [ "${output}" = 'Example/Example/Example' ]
 }
 
 @test "render inserts shell-looking values literally" {
-  run bash -c 'source "$1"; declare -A c=(); mktext set c VALUE '\''$HOME $(printf pwned) `id` {OTHER}'\''; printf "%s" "{VALUE}" | mktext render c' _ "${BATS_TEST_DIRNAME}/../mktext.bash"
+  run bash -c 'source "$1"; declare -A c=(); mktext set c VALUE '\''$HOME $(printf pwned) `id` {OTHER}'\''; printf "%s" "{VALUE}" | mktext render c' _ "${MKTEXT_LIBRARY}"
 
   [ "${status}" -eq 0 ]
   [ "${output}" = '$HOME $(printf pwned) `id` {OTHER}' ]
 }
 
 @test "render is nonrecursive" {
-  run bash -c 'source "$1"; declare -A c=([A]="{B}" [B]="expanded"); printf "%s" "{A}" | mktext render c' _ "${BATS_TEST_DIRNAME}/../mktext.bash"
+  run bash -c 'source "$1"; declare -A c=([A]="{B}" [B]="expanded"); printf "%s" "{A}" | mktext render c' _ "${MKTEXT_LIBRARY}"
 
   [ "${status}" -eq 0 ]
   [ "${output}" = '{B}' ]
 }
 
 @test "unknown macros are preserved exactly" {
-  run bash -c 'source "$1"; declare -A c=(); printf "%s" "x[{ Missing }]y" | mktext render c' _ "${BATS_TEST_DIRNAME}/../mktext.bash"
+  run bash -c 'source "$1"; declare -A c=(); printf "%s" "x[{ Missing }]y" | mktext render c' _ "${MKTEXT_LIBRARY}"
 
   [ "${status}" -eq 0 ]
   [ "${output}" = 'x[{ Missing }]y' ]
 }
 
 @test "malformed and foreign brace syntaxes are preserved" {
-  run bash -c 'source "$1"; declare -A c=([TITLE]="changed"); printf "%s" '\''${TITLE} {{TITLE}} {bad key} {foo.bar} {1TITLE}'\'' | mktext render c' _ "${BATS_TEST_DIRNAME}/../mktext.bash"
+  run bash -c 'source "$1"; declare -A c=([TITLE]="changed"); printf "%s" '\''${TITLE} {{TITLE}} {bad key} {foo.bar} {1TITLE}'\'' | mktext render c' _ "${MKTEXT_LIBRARY}"
 
   [ "${status}" -eq 0 ]
   [ "${output}" = '${TITLE} {{TITLE}} {bad key} {foo.bar} {1TITLE}' ]
 }
 
 @test "macros do not span physical lines" {
-  run bash -c 'source "$1"; declare -A c=([TITLE]="changed"); printf "{TIT\\nLE}" | mktext render c' _ "${BATS_TEST_DIRNAME}/../mktext.bash"
+  run bash -c 'source "$1"; declare -A c=([TITLE]="changed"); printf "{TIT\\nLE}" | mktext render c' _ "${MKTEXT_LIBRARY}"
 
   [ "${status}" -eq 0 ]
   [ "${output}" = $'{TIT\nLE}' ]
 }
 
-@test "unknown operation and wrong arity return status two" {
-  run mktext nope context
-  [ "${status}" -eq 2 ]
-
-  run mktext render context extra
-  [ "${status}" -eq 2 ]
-}
-
 @test "library remains usable with errexit and nounset enabled" {
-  run bash -c 'set -eu; source "$1"; declare -A c=(); mktext set c TITLE Example; printf "%s" "{TITLE}" | mktext render c' _ "${BATS_TEST_DIRNAME}/../mktext.bash"
+  run bash -c 'set -eu; source "$1"; declare -A c=(); mktext set c TITLE Example; printf "%s" "{TITLE}" | mktext render c' _ "${MKTEXT_LIBRARY}"
 
   [ "${status}" -eq 0 ]
   [ "${output}" = 'Example' ]
@@ -260,7 +316,7 @@ teardown() {
 @test "get returns four when Bash reports a recoverable output failure" {
   [ -e /dev/full ] || skip '/dev/full is unavailable on this platform'
 
-  run bash -c 'source "$1"; declare -A c=([TITLE]="Example"); mktext get c TITLE >/dev/full' _ "${BATS_TEST_DIRNAME}/../mktext.bash"
+  run bash -c 'source "$1"; declare -A c=([TITLE]="Example"); mktext get c TITLE >/dev/full' _ "${MKTEXT_LIBRARY}"
 
   [ "${status}" -eq 4 ]
 }
@@ -268,7 +324,17 @@ teardown() {
 @test "render returns four when Bash reports a recoverable output failure" {
   [ -e /dev/full ] || skip '/dev/full is unavailable on this platform'
 
-  run bash -c 'source "$1"; declare -A c=([TITLE]="Example"); printf "%s" "{TITLE}" | mktext render c >/dev/full' _ "${BATS_TEST_DIRNAME}/../mktext.bash"
+  run bash -c 'source "$1"; declare -A c=([TITLE]="Example"); printf "%s" "{TITLE}" | mktext render c >/dev/full' _ "${MKTEXT_LIBRARY}"
 
+  [ "${status}" -eq 4 ]
+}
+
+@test "help and version return four on recoverable output failure" {
+  [ -e /dev/full ] || skip '/dev/full is unavailable on this platform'
+
+  run bash -c 'source "$1"; mktext --help >/dev/full' _ "${MKTEXT_LIBRARY}"
+  [ "${status}" -eq 4 ]
+
+  run bash -c 'source "$1"; mktext --version >/dev/full' _ "${MKTEXT_LIBRARY}"
   [ "${status}" -eq 4 ]
 }

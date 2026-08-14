@@ -1,4 +1,4 @@
-## @file mktext.bash
+## @file src/mktext.bash
 ## @brief Provides deterministic named text substitution for Bash callers.
 ## @details
 ## `mktext` is intentionally a small rendering library.  Callers own value
@@ -6,17 +6,86 @@
 ## lexical substitution.  Template text and replacement values are always
 ## treated as data.  They are never evaluated, sourced, or shell-expanded.
 ##
-## The public API consists of one function, `mktext()`.  Private helpers use the
-## reserved `__mktext_` prefix.  Caller context variables using that prefix are
-## rejected so Bash dynamic scoping cannot make a private local variable shadow
-## the requested context.
+## The public API consists of one function, `mktext()`.  Private helpers and
+## metadata variables use the reserved `__mktext_` prefix.  Caller context
+## variables using that prefix are rejected so Bash dynamic scoping cannot make
+## a private local variable shadow the requested context.
+##
+## A generated distribution artifact may initialize the private metadata
+## variables before this maintained source is copied into it.  The defaults below
+## keep `src/mktext.bash` directly sourceable during development without runtime
+## Git, clock, or network access.
 ##
 ## @par Examples
 ## @code
 ## declare -A context=()
 ## mktext set context TITLE "Fewer Incidents"
 ## printf '%s\n' 'Hello, {TITLE}.' | mktext render context
+## mktext --version
 ## @endcode
+
+## @var __mktext_version
+## @brief Version metadata reported by `mktext version` and `mktext --version`.
+__mktext_version="${__mktext_version:-0.0.0-dev}"
+
+## @var __mktext_build_date
+## @brief Source-revision timestamp embedded in a generated artifact.
+__mktext_build_date="${__mktext_build_date:-unknown}"
+
+## @var __mktext_build_commit
+## @brief Abbreviated source commit embedded in a generated artifact.
+__mktext_build_commit="${__mktext_build_commit:-unknown}"
+
+## @fn __mktext_print_usage()
+## @brief Writes the complete compact public usage surface.
+## @details
+## This helper writes only usage text and does not choose the destination stream.
+## The dispatcher uses standard output for requested help and redirects the same
+## text to standard error after API-usage diagnostics.
+##
+## @retval 0 Usage text was written successfully.
+## @retval 1 Standard output rejected the complete usage text.
+__mktext_print_usage() {
+  printf '%s\n' \
+    'Usage:' \
+    '  mktext set CONTEXT KEY VALUE' \
+    '  mktext get CONTEXT KEY' \
+    '  mktext exists CONTEXT KEY' \
+    '  mktext unset CONTEXT KEY' \
+    '  mktext render CONTEXT' \
+    '  mktext help' \
+    '  mktext version' \
+    '' \
+    'Options:' \
+    '  -h, --help       Show this help text.' \
+    '      --version    Show version and build metadata.'
+}
+
+## @fn __mktext_print_version()
+## @brief Writes stable three-line artifact identity information.
+## @details
+## Metadata is fixed when the distribution artifact is built.  Maintained source
+## uses development defaults.  This function never queries Git, the clock, or any
+## other external runtime state.
+##
+## @retval 0 Version metadata was written successfully.
+## @retval 1 Standard output rejected the complete metadata.
+__mktext_print_version() {
+  printf 'mktext %s\nbuild_date=%s\ncommit=%s\n' \
+    "${__mktext_version}" \
+    "${__mktext_build_date}" \
+    "${__mktext_build_commit}"
+}
+
+## @fn __mktext_usage_error()
+## @brief Writes an API-usage diagnostic followed by compact usage text.
+## @param $1 Human-readable diagnostic body without the `mktext:` prefix.
+## @retval 2 Always returns the public invalid-usage status.
+__mktext_usage_error() {
+  printf 'mktext: %s\n\n' "$1" >&2 || :
+  __mktext_print_usage >&2 || :
+  return 2
+}
 
 ## @fn __mktext_context_info()
 ## @brief Validates a caller-supplied context and reports its Bash attributes.
@@ -250,31 +319,36 @@ __mktext_render() {
 ## @fn mktext()
 ## @brief Dispatches the complete public mktext API.
 ## @details
-## The dispatcher validates operation arity, context identity and type, key
-## grammar, and mutation safety before touching caller state.  Read-only
+## The dispatcher handles context/rendering operations plus the context-free help
+## and version forms.  Context operations validate arity, context identity and
+## type, key grammar, and mutation safety before touching caller state.  Read-only
 ## associative arrays are valid for `get`, `exists`, and `render`; `set` and
 ## `unset` reject them before Bash can raise a fatal read-only assignment error.
 ##
-## Standard output is reserved for public data: `get` values and rendered text.
-## Diagnostics are written to standard error.  Ordinary error paths use
-## `return`, never `exit`, so sourcing this library does not transfer ownership
-## of the caller's process lifetime.
+## Requested public data and informational output use standard output.
+## Diagnostics and corrective usage text for API misuse use standard error.
+## Ordinary error paths use `return`, never `exit`, so sourcing this library does
+## not transfer ownership of the caller's process lifetime.
 ##
-## @param $1 Operation: set, get, exists, unset, or render.
-## @param $2 Caller-owned associative-array context name.
+## @param $1 Operation or informational form.
+## @param $2 Caller-owned associative-array context name when required.
 ## @param $3 Key for set/get/exists/unset operations.
 ## @param $4 Value for set operations.
-## @retval 0 Operation succeeded, or `exists` found the requested key.
+## @retval 0 Operation or requested information succeeded, or `exists` found the
+## requested key.
 ## @retval 1 `get` or `exists` did not find the requested key.
 ## @retval 2 Operation name, arity, or other API usage is invalid.
 ## @retval 3 Context or key validation failed.
-## @retval 4 A distinguishable recoverable data input/output failure occurred.
+## @retval 4 A distinguishable recoverable public-data input/output failure
+## occurred.
 ##
 ## @par Examples
 ## @code
 ## declare -A context=()
 ## mktext set context TITLE 'Example'
 ## printf '%s' '{TITLE}' | mktext render context
+## mktext --help
+## mktext --version
 ## @endcode
 mktext() {
   local __mktext_operation
@@ -285,35 +359,57 @@ mktext() {
   local __mktext_normalized
 
   if (( $# < 1 )); then
-    printf '%s\n' 'mktext: expected an operation' >&2
-    return 2
+    __mktext_usage_error 'expected an operation'
+    return $?
   fi
 
   __mktext_operation="$1"
   shift
 
   case "${__mktext_operation}" in
+    help | -h | --help)
+      if (( $# != 0 )); then
+        __mktext_usage_error "${__mktext_operation} does not accept arguments"
+        return $?
+      fi
+
+      if ! __mktext_print_usage; then
+        return 4
+      fi
+      return 0
+      ;;
+    version | --version)
+      if (( $# != 0 )); then
+        __mktext_usage_error "${__mktext_operation} does not accept arguments"
+        return $?
+      fi
+
+      if ! __mktext_print_version; then
+        return 4
+      fi
+      return 0
+      ;;
     set)
       if (( $# != 3 )); then
-        printf '%s\n' 'mktext: set expects CONTEXT KEY VALUE' >&2
-        return 2
+        __mktext_usage_error 'set expects CONTEXT KEY VALUE'
+        return $?
       fi
       ;;
     get | exists | unset)
       if (( $# != 2 )); then
-        printf 'mktext: %s expects CONTEXT KEY\n' "${__mktext_operation}" >&2
-        return 2
+        __mktext_usage_error "${__mktext_operation} expects CONTEXT KEY"
+        return $?
       fi
       ;;
     render)
       if (( $# != 1 )); then
-        printf '%s\n' 'mktext: render expects CONTEXT' >&2
-        return 2
+        __mktext_usage_error 'render expects CONTEXT'
+        return $?
       fi
       ;;
     *)
-      printf 'mktext: unknown operation: %s\n' "${__mktext_operation}" >&2
-      return 2
+      __mktext_usage_error "unknown operation: ${__mktext_operation}"
+      return $?
       ;;
   esac
 

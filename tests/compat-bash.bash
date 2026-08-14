@@ -71,10 +71,37 @@ if (( BASH_VERSINFO[0] < 4 || (BASH_VERSINFO[0] == 4 && BASH_VERSINFO[1] < 3) ))
   exit 1
 fi
 
-# The compatibility harness is executed from the repository root.  ShellCheck
-# does not follow this dynamic test-time source path during its standalone pass.
-# shellcheck disable=SC1091
-source ./mktext.bash
+MKTEXT_LIBRARY="${MKTEXT_LIBRARY:-./src/mktext.bash}"
+
+# The compatibility target is selected dynamically so the same harness can
+# exercise maintained source and the generated distribution artifact.
+# shellcheck disable=SC1090
+source "${MKTEXT_LIBRARY}"
+
+output=''
+status=0
+capture output status mktext --help
+check_status 0 "${status}" 'help status'
+if [[ ${output} != Usage:* || ${output} != *'mktext version'* ]]; then
+  printf 'FAIL: help output did not contain the expected usage surface\n' >&2
+  failures=$((failures + 1))
+fi
+
+output=''
+status=0
+capture output status mktext --version
+check_status 0 "${status}" 'version status'
+if [[ ${output} != mktext\ *$'\n'build_date=* || ${output} != *$'\n'commit=* ]]; then
+  printf 'FAIL: version output did not contain three metadata lines\n' >&2
+  failures=$((failures + 1))
+fi
+
+if mktext foobar >/dev/null 2>&1; then
+  status=0
+else
+  status=$?
+fi
+check_status 2 "${status}" 'unknown operation status'
 
 # Context variables are consumed indirectly by name through the public API.
 # shellcheck disable=SC2034
@@ -108,14 +135,16 @@ check_status 1 "${status}" 'exists absent key'
 rendered=''
 status=0
 capture rendered status bash -c \
-  'source ./mktext.bash; declare -A c=([TITLE]="Example"); printf "%s" "{TITLE}/{ title }" | mktext render c'
+  'source "$1"; declare -A c=([TITLE]="Example"); printf "%s" "{TITLE}/{ title }" | mktext render c' \
+  _ "${MKTEXT_LIBRARY}"
 check_status 0 "${status}" 'render recognized macros'
 check_equal 'Example/Example' "${rendered}" 'render recognized macros output'
 
 rendered=''
 status=0
 capture rendered status bash -c \
-  'source ./mktext.bash; declare -A c=([A]="{B}" [B]="expanded"); printf "%s" "{A}" | mktext render c'
+  'source "$1"; declare -A c=([A]="{B}" [B]="expanded"); printf "%s" "{A}" | mktext render c' \
+  _ "${MKTEXT_LIBRARY}"
 check_status 0 "${status}" 'nonrecursive render status'
 check_equal '{B}' "${rendered}" 'nonrecursive render output'
 
@@ -125,7 +154,8 @@ status=0
 # literal so the renderer can prove it does not reinterpret shell syntax.
 # shellcheck disable=SC2016
 capture rendered status bash -c \
-  'source ./mktext.bash; declare -A c=([TITLE]="changed"); printf "%s" '\''${TITLE} {{TITLE}} {bad key} {UNKNOWN}'\'' | mktext render c'
+  'source "$1"; declare -A c=([TITLE]="changed"); printf "%s" '\''${TITLE} {{TITLE}} {bad key} {UNKNOWN}'\'' | mktext render c' \
+  _ "${MKTEXT_LIBRARY}"
 check_status 0 "${status}" 'literal preservation status'
 # shellcheck disable=SC2016
 check_equal '${TITLE} {{TITLE}} {bad key} {UNKNOWN}' "${rendered}" \
@@ -189,4 +219,5 @@ if (( failures != 0 )); then
   exit 1
 fi
 
-printf 'Bash %s compatibility checks passed\n' "${BASH_VERSION}"
+printf 'Bash %s compatibility checks passed for %s\n' \
+  "${BASH_VERSION}" "${MKTEXT_LIBRARY}"
