@@ -68,3 +68,5 @@ BASH_EXEC_FILTER_REGEX_EXCLUDE: "(libs?|tests?|examples?|vendor)"
 #   - place spaces around redirections
 #   - keep column alignment padding
 BASH_SHFMT_ARGUMENTS: -i 2 -bn -ci -sr -kp
+
+REPOSITORY_SEMGREP_ARGUMENTS: "--exclude=doc/reference --exclude=doc/reference/**"
