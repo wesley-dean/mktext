@@ -27,7 +27,7 @@ EXCLUDE_PATTERNS       = */tests/* \
                          */vendor/* \
                          */dist/*
 
-EXTENSION_MAPPING      = bash=C
+EXTENSION_MAPPING      = bash=C++
 FILTER_PATTERNS        = *.bash=vendor/doxygen-bash.awk
 
 EXTRACT_ALL            = NO
