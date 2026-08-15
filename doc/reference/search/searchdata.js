@@ -2,7 +2,7 @@ var indexSectionsWithContent =
 {
   0: "_im",
   1: "m",
-  2: "_",
+  2: "_m",
   3: "_i"
 };
 
