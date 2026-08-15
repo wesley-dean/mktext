@@ -96,7 +96,7 @@ mktext set CONTEXT KEY VALUE
 mktext get CONTEXT KEY
 mktext exists CONTEXT KEY
 mktext unset CONTEXT KEY
-mktext render CONTEXT
+mktext render CONTEXT [--start-delimiter STRING] [--end-delimiter STRING]
 ```
 
 Help is available through equivalent forms:
@@ -142,8 +142,8 @@ Keys use this grammar before case normalization:
 [A-Za-z][A-Za-z0-9_-]*
 ```
 
-Template macros use one pair of braces and may contain spaces or horizontal
-tabs around the key:
+By default, template macros use one pair of braces and may contain spaces or
+horizontal tabs around the key:
 
 ```text
 {TITLE}
@@ -151,7 +151,39 @@ tabs around the key:
 {NUMBER4}
 ```
 
-Keys are normalized to uppercase.  Hyphens and underscores remain distinct.
+Delimited macro keys are normalized to uppercase.  Hyphens and underscores
+remain distinct.
+
+### Configurable Delimiters
+
+`render` accepts literal start and end delimiters for templates that use a
+different marker syntax:
+
+```bash
+printf '%s\n' '{{TITLE}}' | mktext render context \
+  --start-delimiter '{{' \
+  --end-delimiter '}}'
+```
+
+Delimiters are literal strings, not regular expressions.  Multi-character and
+regex-looking strings therefore require no regex escaping by the caller.
+
+Set both delimiters to empty strings to render bare key tokens:
+
+```bash
+printf '%s\n' 'ADR NUMBER4: TITLE' | mktext render context \
+  --start-delimiter '' \
+  --end-delimiter ''
+```
+
+Bare-key mode scans complete tokens using the normal key grammar and performs an
+exact, case-sensitive lookup.  It does not perform substring replacement.  For
+example, if only `TITLE` is present, `TITLE` is replaced while `SUBTITLE`,
+`title`, `1TITLE`, and `_TITLE` remain unchanged.  Keys such as `FOO-BAR` and
+`FOO_BAR` remain complete, distinct tokens and need no escaping.
+
+The two delimiters must both be non-empty or both be empty.  One-sided empty
+delimiters are not defined by the current API.
 
 ## Rendering Semantics
 
@@ -160,9 +192,10 @@ Rendering is lexical, literal, and single-pass.
 - Template text is never evaluated as shell code.
 - Context values are inserted exactly as stored.
 - Inserted values are not rescanned for additional macros.
-- Unknown recognized macros remain unchanged.
-- Malformed or unrelated brace text remains unchanged.
-- Macros do not span input newlines.
+- Unknown recognized macros and bare tokens remain unchanged.
+- Malformed or unrelated template text remains unchanged.
+- Delimited macros and bare tokens do not span input newlines.
+- Configured delimiters are matched literally, never as regular expressions.
 - `render` reads standard input and writes standard output.
 - Whether the input ended with a newline is preserved.
 
@@ -190,7 +223,7 @@ The public status contract is:
 ```text
 0  success, requested informational output succeeded, or a predicate is true
 1  requested key is absent for get/exists
-2  invalid operation name, arity, or other API usage
+2  invalid operation name, arity, render option/configuration, or other API usage
 3  invalid context reference, readonly mutation, or invalid key
 4  distinguishable recoverable public-data input/output failure
 ```

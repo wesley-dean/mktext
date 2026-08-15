@@ -82,7 +82,7 @@ output=''
 status=0
 capture output status mktext --help
 check_status 0 "${status}" 'help status'
-if [[ ${output} != Usage:* || ${output} != *'mktext version'* ]]; then
+if [[ ${output} != Usage:* || ${output} != *'mktext version'* || ${output} != *'--start-delimiter STRING'* || ${output} != *'--end-delimiter STRING'* ]]; then
   printf 'FAIL: help output did not contain the expected usage surface\n' >&2
   failures=$((failures + 1))
 fi
@@ -191,6 +191,33 @@ capture rendered status bash -c \
   _ "${MKTEXT_LIBRARY}"
 check_status 0 "${status}" 'render recognized macros'
 check_equal 'Example/Example' "${rendered}" 'render recognized macros output'
+
+rendered=''
+status=0
+# Delimiter strings are intentionally passed as ordinary literal arguments.
+# shellcheck disable=SC2016
+capture rendered status bash -c \
+  'source "$1"; declare -A c=([TITLE]="Example"); printf "%s" "{{TITLE}}/{{ title }}" | mktext render c --start-delimiter "{{" --end-delimiter "}}"' \
+  _ "${MKTEXT_LIBRARY}"
+check_status 0 "${status}" 'custom delimiter render status'
+check_equal 'Example/Example' "${rendered}" 'custom delimiter render output'
+
+rendered=''
+status=0
+# Bare mode must identify complete tokens rather than replace key substrings.
+# shellcheck disable=SC2016
+capture rendered status bash -c \
+  'source "$1"; declare -A c=([TITLE]="Example" [FOO-BAR]="hyphen"); printf "%s" "TITLE SUBTITLE title FOO-BAR 1TITLE" | mktext render c --start-delimiter "" --end-delimiter ""' \
+  _ "${MKTEXT_LIBRARY}"
+check_status 0 "${status}" 'bare render status'
+check_equal 'Example SUBTITLE title hyphen 1TITLE' "${rendered}" 'bare render output'
+
+if mktext render context --start-delimiter '' >/dev/null 2>&1; then
+  status=0
+else
+  status=$?
+fi
+check_status 2 "${status}" 'one-sided empty delimiter status'
 
 rendered=''
 status=0

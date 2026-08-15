@@ -27,7 +27,9 @@ teardown() {
   [ "${status}" -eq 0 ]
   help_output="${output}"
   [[ "${help_output}" == Usage:* ]]
-  [[ "${help_output}" == *'mktext render CONTEXT'* ]]
+  [[ "${help_output}" == *'mktext render CONTEXT [--start-delimiter STRING] [--end-delimiter STRING]'* ]]
+  [[ "${help_output}" == *'--start-delimiter STRING'* ]]
+  [[ "${help_output}" == *'--end-delimiter STRING'* ]]
   [[ "${help_output}" == *'mktext version'* ]]
   [[ "${help_output}" == *'-h, --help'* ]]
   [[ "${help_output}" == *'--version'* ]]
@@ -69,7 +71,7 @@ teardown() {
 
   run mktext render context extra
   [ "${status}" -eq 2 ]
-  [[ "${output}" == *'mktext: render expects CONTEXT'* ]]
+  [[ "${output}" == *'mktext: unknown render option: extra'* ]]
   [[ "${output}" == *'Usage:'* ]]
 
   run mktext --help extra
@@ -179,6 +181,86 @@ teardown() {
 
   [ "${status}" -eq 0 ]
   [ "${output}" = 'Example/Example/Example' ]
+}
+
+@test "render supports literal multi-character delimiters" {
+  run bash -c 'source "$1"; declare -A c=([TITLE]="Example"); printf "%s" "{{TITLE}}/{{ title }}/{{TiTlE}}/{{MISSING}}" | mktext render c --start-delimiter "{{" --end-delimiter "}}"' _ "${MKTEXT_LIBRARY}"
+
+  [ "${status}" -eq 0 ]
+  [ "${output}" = 'Example/Example/Example/{{MISSING}}' ]
+}
+
+@test "render treats configured delimiters as literal strings" {
+  run bash -c 'source "$1"; declare -A c=([TITLE]="Example"); printf "%s" ".*TITLE+?" | mktext render c --start-delimiter ".*" --end-delimiter "+?"' _ "${MKTEXT_LIBRARY}"
+
+  [ "${status}" -eq 0 ]
+  [ "${output}" = 'Example' ]
+}
+
+@test "bare render substitutes complete keys without substring matching" {
+  run bash -c 'source "$1"; declare -A c=([TITLE]="Example"); printf "%s" "TITLE SUBTITLE 1TITLE _TITLE -TITLE" | mktext render c --start-delimiter "" --end-delimiter ""' _ "${MKTEXT_LIBRARY}"
+
+  [ "${status}" -eq 0 ]
+  [ "${output}" = 'Example SUBTITLE 1TITLE _TITLE -TITLE' ]
+}
+
+@test "bare render is case-sensitive" {
+  run bash -c 'source "$1"; declare -A c=([TITLE]="Example"); printf "%s" "TITLE title Title" | mktext render c --start-delimiter "" --end-delimiter ""' _ "${MKTEXT_LIBRARY}"
+
+  [ "${status}" -eq 0 ]
+  [ "${output}" = 'Example title Title' ]
+}
+
+@test "bare render preserves hyphen and underscore key boundaries" {
+  run bash -c 'source "$1"; declare -A c=([FOO-BAR]="hyphen" [FOO_BAR]="underscore" [FOO-]="trailing"); printf "%s" "FOO-BAR FOO_BAR FOO- XFOO-BAR" | mktext render c --start-delimiter "" --end-delimiter ""' _ "${MKTEXT_LIBRARY}"
+
+  [ "${status}" -eq 0 ]
+  [ "${output}" = 'hyphen underscore trailing XFOO-BAR' ]
+}
+
+@test "bare render remains literal and nonrecursive" {
+  run bash -c 'source "$1"; declare -A c=([TITLE]="OTHER" [OTHER]="expanded"); printf "%s" "TITLE" | mktext render c --start-delimiter "" --end-delimiter ""' _ "${MKTEXT_LIBRARY}"
+
+  [ "${status}" -eq 0 ]
+  [ "${output}" = 'OTHER' ]
+}
+
+@test "configured render options do not require a writable context" {
+  run bash -c 'source "$1"; declare -Ar c=([TITLE]="Readonly"); printf "%s" "TITLE" | mktext render c --start-delimiter "" --end-delimiter ""' _ "${MKTEXT_LIBRARY}"
+
+  [ "${status}" -eq 0 ]
+  [ "${output}" = 'Readonly' ]
+}
+
+@test "invalid render delimiter configuration returns status two" {
+  run mktext render context --start-delimiter ''
+  [ "${status}" -eq 2 ]
+  [[ "${output}" == *'render delimiters must both be empty or both be non-empty'* ]]
+  [[ "${output}" == *'Usage:'* ]]
+
+  run mktext render context --end-delimiter ''
+  [ "${status}" -eq 2 ]
+  [[ "${output}" == *'render delimiters must both be empty or both be non-empty'* ]]
+
+  run mktext render context --start-delimiter
+  [ "${status}" -eq 2 ]
+  [[ "${output}" == *'--start-delimiter expects STRING'* ]]
+
+  run mktext render context --end-delimiter
+  [ "${status}" -eq 2 ]
+  [[ "${output}" == *'--end-delimiter expects STRING'* ]]
+
+  run mktext render context --start-delimiter '{{' --start-delimiter '[[' --end-delimiter '}}'
+  [ "${status}" -eq 2 ]
+  [[ "${output}" == *'--start-delimiter at most once'* ]]
+
+  run mktext render context --start-delimiter '{{' --end-delimiter '}}' --unknown value
+  [ "${status}" -eq 2 ]
+  [[ "${output}" == *'unknown render option: --unknown'* ]]
+
+  run mktext render context --start-delimiter $'x\ny' --end-delimiter 'z'
+  [ "${status}" -eq 2 ]
+  [[ "${output}" == *'must not contain newline characters'* ]]
 }
 
 @test "render inserts shell-looking values literally" {

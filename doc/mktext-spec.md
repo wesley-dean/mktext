@@ -76,7 +76,7 @@ mktext set CONTEXT KEY VALUE
 mktext get CONTEXT KEY
 mktext exists CONTEXT KEY
 mktext unset CONTEXT KEY
-mktext render CONTEXT
+mktext render CONTEXT [--start-delimiter STRING] [--end-delimiter STRING]
 ```
 
 The public informational forms are:
@@ -107,7 +107,9 @@ An informational form invoked with extra arguments SHALL fail as invalid API
 usage with status 2.
 
 An operation invoked with the wrong number of arguments SHALL fail with status
-2 and a diagnostic plus usage information on standard error.
+2 and a diagnostic plus usage information on standard error.  Invalid render
+options or delimiter configurations SHALL use the same status and stream
+contract.
 
 An unknown operation SHALL fail with status 2 and a diagnostic plus usage
 information on standard error.
@@ -347,21 +349,33 @@ On success, `unset` SHALL write nothing to standard output or standard error.
 
 ## Macro Grammar
 
-A recognized template macro exists entirely on one physical input line and has
-this form:
+`render` supports a default literal-delimiter grammar, configurable literal
+delimiters, and an explicit bare-key mode.
+
+When both delimiters are non-empty, a recognized template macro exists entirely
+on one physical input line and has this form:
 
 ```text
-{ OPTIONAL-BLANKS KEY OPTIONAL-BLANKS }
+START OPTIONAL-BLANKS KEY OPTIONAL-BLANKS END
 ```
 
 where:
 
 ```text
+START           := the selected literal start delimiter
+END             := the selected literal end delimiter
 OPTIONAL-BLANKS := zero or more ASCII spaces or horizontal tabs
 KEY             := [A-Za-z][A-Za-z0-9_-]*
 ```
 
-Examples of recognized macros include:
+The default delimiters are:
+
+```text
+START := {
+END   := }
+```
+
+so existing templates retain the established forms:
 
 ```text
 {TITLE}
@@ -370,9 +384,13 @@ Examples of recognized macros include:
 {foo-bar}
 ```
 
-The normalized lookup key is uppercase.
+For non-empty delimiters, the lookup key SHALL be normalized to uppercase before
+context lookup.  Delimiter strings SHALL be matched literally.  They SHALL NOT
+be interpreted as regular expressions, shell patterns supplied by the caller,
+or shell syntax.
 
-The following are not recognized macros:
+For the default `{` and `}` delimiters, the following remain unrecognized so the
+existing grammar is backward compatible:
 
 ```text
 {}
@@ -384,16 +402,57 @@ ${TITLE}
 {1TITLE}
 ```
 
-Unrecognized brace text is ordinary template text.
+When a caller deliberately selects `{{` and `}}`, however, `{{TITLE}}` is a
+recognized macro under that configured grammar.
 
-A macro SHALL NOT span a newline delimiter.
+When both selected delimiters are empty, `render` SHALL use bare-key mode rather
+than treating the empty string as a substring delimiter.  Bare-key mode SHALL
+scan maximal runs of characters from this set:
+
+```text
+[A-Za-z0-9_-]
+```
+
+A complete run SHALL be eligible for substitution only when that complete run
+satisfies the normal key grammar:
+
+```text
+[A-Za-z][A-Za-z0-9_-]*
+```
+
+Bare-key lookup SHALL be case-sensitive and SHALL use the complete token exactly
+as it appears in the template.  It SHALL NOT uppercase or otherwise normalize
+the token before lookup.
+
+This means a public context populated through `mktext set`, which stores canonical
+uppercase keys, naturally recognizes explicit uppercase bare markers while
+ordinary lower- or mixed-case prose remains unchanged:
+
+```text
+Context:   TITLE=Example
+Template:  TITLE title Title SUBTITLE
+Output:    Example title Title SUBTITLE
+```
+
+`TITLE` SHALL NOT match inside `SUBTITLE`, `1TITLE`, `_TITLE`, or `-TITLE`.
+Hyphenated and underscored complete tokens remain ordinary literal key names:
+
+```text
+FOO-BAR
+FOO_BAR
+```
+
+Bare-key mode does not assign special meaning to surrounding whitespace.  Space
+and tab characters remain ordinary template data outside the token.
+
+A macro or bare token SHALL NOT span a newline delimiter.
 
 ## render
 
 Invocation:
 
 ```text
-mktext render CONTEXT
+mktext render CONTEXT [--start-delimiter STRING] [--end-delimiter STRING]
 ```
 
 `render` SHALL read template text from standard input and write rendered text to
@@ -404,13 +463,58 @@ Readonly contexts are valid for `render`.
 The v1 API SHALL NOT accept a template filename argument.  Callers may use shell
 redirection or pipelines.
 
-### Recognized macro with a present key
+The delimiter options apply only to the current render invocation.  They SHALL
+NOT mutate the caller-owned context or create library-owned configuration state.
 
-For each recognized macro whose normalized key exists in the context, `render`
-SHALL replace the complete macro text with the exact stored value.
+The options SHALL appear after `CONTEXT`, MAY appear in either order, and SHALL
+each appear at most once.  Their defaults are:
 
-Whitespace and case in the macro are lookup syntax only and SHALL NOT be
-preserved around a successful replacement.
+```text
+--start-delimiter "{"
+--end-delimiter   "}"
+```
+
+Each non-empty delimiter MAY contain multiple characters.  Delimiters are literal
+Bash strings and are never regular expressions.  Delimiter strings containing a
+newline are invalid because rendering remains line-local.
+
+The two delimiters SHALL either both be non-empty or both be empty.  A one-sided
+empty delimiter is not defined by this version of the API and SHALL fail as
+invalid usage with status 2.  Both empty delimiters select the bare-key mode
+defined above.
+
+Unknown render options, missing option values, duplicate delimiter options,
+one-sided empty delimiters, and newline-containing delimiters SHALL fail with
+status 2, write a concise diagnostic plus usage information to standard error,
+and produce no rendered output before validation succeeds.
+
+Examples:
+
+```bash
+# Default {NAME} syntax.
+printf '%s\n' '{TITLE}' | mktext render context
+
+# Multi-character literal delimiters.
+printf '%s\n' '{{TITLE}}' | mktext render context \\
+  --start-delimiter '{{' \\
+  --end-delimiter '}}'
+
+# Bare-key mode.
+printf '%s\n' 'TITLE' | mktext render context \\
+  --start-delimiter '' \\
+  --end-delimiter ''
+```
+
+### Recognized macro or token with a present key
+
+For each recognized delimited macro whose normalized key exists in the context,
+`render` SHALL replace the complete macro text with the exact stored value.  For
+each recognized bare token whose exact case-sensitive key exists in the context,
+`render` SHALL replace the complete token with the exact stored value.
+
+Whitespace and case inside a delimited macro are lookup syntax only and SHALL
+NOT be preserved around a successful replacement.  Bare tokens have no special
+surrounding-whitespace syntax and are matched case-sensitively.
 
 Example:
 
@@ -420,10 +524,11 @@ Template:  [{ title }]
 Output:    [Example]
 ```
 
-### Recognized macro with an absent key
+### Recognized macro or token with an absent key
 
-If a recognized macro's normalized key does not exist, `render` SHALL preserve
-the original macro text exactly as it appeared in the template.
+If a recognized delimited macro's normalized key does not exist, or a recognized
+bare token does not exist under its exact case-sensitive spelling, `render` SHALL
+preserve the original template text exactly.
 
 Example:
 
@@ -432,11 +537,14 @@ Template:  [{ Missing }]
 Output:    [{ Missing }]
 ```
 
-Unknown macros are not render failures.
+Unknown macros and bare tokens are not render failures.
 
-### Unrecognized or malformed brace text
+### Unrecognized or malformed template text
 
-Text that does not satisfy the macro grammar SHALL be copied unchanged.
+Text that does not satisfy the selected rendering grammar SHALL be copied
+unchanged.  In bare-key mode, a maximal key-character run that does not begin
+with an ASCII letter SHALL be preserved as one unchanged run rather than scanned
+for a shorter key inside it.
 
 Example:
 
@@ -480,9 +588,13 @@ Template:  {A}
 Output:    {B}
 ```
 
+The same rule applies to custom delimiters and bare-key mode.  Inserted values
+are output data and SHALL NOT become new scanner input.
+
 ### Multiple occurrences
 
-Every recognized occurrence of a present key SHALL be replaced.
+Every recognized occurrence of a present key SHALL be replaced according to
+the selected rendering grammar.
 
 Example:
 
@@ -490,6 +602,14 @@ Example:
 Context:   X=value
 Template:  {X}/{x}/{ X }
 Output:    value/value/value
+```
+
+In bare-key mode, case sensitivity applies independently to each token:
+
+```text
+Context:   X=value
+Template:  X/x/X
+Output:    value/x/value
 ```
 
 ## Streaming and Line Termination
@@ -511,7 +631,8 @@ In particular:
 
 Replacement values may themselves contain newline characters.  Those newlines
 are intentional output data and do not change the fact that template scanning is
-line-local.
+line-local.  Configured delimiters therefore SHALL NOT contain newline
+characters.
 
 When `read` succeeds, its newline delimiter SHALL be reproduced after the
 rendered physical line.  A final unterminated line SHALL be rendered without an
@@ -557,7 +678,7 @@ The public normal-return status meanings are:
 ```text
 0  operation or requested informational output succeeded, or a predicate is true
 1  requested key is absent for get/exists
-2  invalid operation name, arity, or other API usage
+2  invalid operation name, arity, render option/configuration, or other API usage
 3  invalid context reference, readonly mutation, or invalid key
 4  distinguishable recoverable public-data input/output failure
 ```
@@ -593,9 +714,10 @@ The generated artifact's version, build date, and commit are fixed at build time
 Reporting them SHALL NOT acquire runtime external state.
 
 Given the same maintained source, explicit build version, source-revision commit
-metadata, template bytes representable by Bash, context, and Bash behavior
-relevant to this specification, `mktext` SHOULD produce the same generated
-artifact metadata and the same ordinary rendering results.
+metadata, template bytes representable by Bash, context, render delimiter
+configuration, and Bash behavior relevant to this specification, `mktext` SHOULD
+produce the same generated artifact metadata and the same ordinary rendering
+results.
 
 The library SHALL NOT acquire current time, random state, environment values,
 Git state, network data, filesystem metadata, or other implicit external values
@@ -626,7 +748,7 @@ text is safe for every consumer.
 The following are public compatibility surfaces:
 
 - the public `mktext` function name;
-- operation names, aliases, and arity;
+- operation names, aliases, arity, and render option syntax;
 - help and version output contracts;
 - direct execution of the generated distribution artifact for context-free
   informational forms;
@@ -634,7 +756,8 @@ The following are public compatibility surfaces:
 - context requirements and the reserved private prefix;
 - readonly-context mutation behavior;
 - key grammar and normalization;
-- macro grammar;
+- default and configurable delimiter grammar;
+- bare-key tokenization and case-sensitive exact lookup semantics;
 - literal and nonrecursive rendering semantics;
 - unknown/malformed preservation behavior;
 - stream behavior and final-newline preservation;
@@ -650,6 +773,8 @@ require a new ADR and Semantic Versioning impact.
 The v1 specification does not include:
 
 - strict unknown-macro validation;
+- regular-expression delimiters;
+- one-sided empty delimiter modes such as `$NAME`;
 - transformations or filters;
 - expressions or arithmetic;
 - conditionals or loops;
