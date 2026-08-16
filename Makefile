@@ -51,7 +51,8 @@ build: $(SOURCE_LIBRARY)
 		printf '__mktext_build_date=%q\n' "$(BUILD_DATE)"; \
 		printf '__mktext_build_commit=%q\n' "$(BUILD_COMMIT)"; \
 		printf '\n'; \
-		cat "$(SOURCE_LIBRARY)"; \
+		cat "$(SOURCE_LIBRARY)" \
+			| sed '/^#/d'; \
 	} >"$(DIST_LIBRARY).tmp"
 	chmod 0755 "$(DIST_LIBRARY).tmp"
 	mv "$(DIST_LIBRARY).tmp" "$(DIST_LIBRARY)"
