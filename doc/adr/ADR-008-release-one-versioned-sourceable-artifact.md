@@ -25,6 +25,13 @@ create multiple competing sources of truth.  A narrow source-to-distribution
 step lets the maintained implementation remain stable while the released file
 identifies exactly what produced it.
 
+The maintained source also carries substantial full-line documentation comments,
+including Doxygen material used to generate the browsable reference.  Those
+comments are valuable in maintained source and generated documentation but do
+not provide runtime value in the consumer artifact.  Bootstrap already treats
+that boundary explicitly by removing full comment lines while assembling its
+distribution artifact.
+
 The artifact is primarily a sourceable library because context operations depend
 on associative arrays in the caller's shell.  Context-free informational forms
 are also useful before a caller has sourced the library.  The same distribution
@@ -32,15 +39,17 @@ file can provide both behaviors without introducing a second wrapper program.
 
 This revisits the initial Bootstrap ADR assessment for ADR-010.  The rejected
 part remains modular assembly for its own sake.  The newly demonstrated need is
-a deterministic distribution boundary for metadata injection and direct
-consumer invocation, so the reusable portion of that decision now applies with
-substantial simplification.
+a deterministic distribution boundary for metadata injection, source-comment
+removal, and direct consumer invocation, so the reusable portion of that
+decision now applies with substantial simplification.
 
 ## Decision Drivers
 
 - Keep one human-maintained implementation file.
 - Keep one consumer-facing release artifact.
 - Embed release identity without editing source for every version.
+- Keep source and Doxygen commentary in maintained source and reference output
+  rather than duplicating it into the runtime artifact.
 - Permit basic help and version discovery before sourcing the library.
 - Preserve the sourced function API for caller-owned associative-array state.
 - Derive release version from the existing semantic-version workflow.
@@ -96,9 +105,30 @@ associative-array contexts live in the caller's shell and are not transferable
 to a child process as ordinary exported environment state.
 
 The build step SHALL remain intentionally narrow.  It SHALL prepend the
-interpreter directive and generated artifact metadata and then copy the
-maintained `src/mktext.bash` implementation without introducing a template
-language, transpiler, minifier, or modular source assembly requirement.
+interpreter directive and generated artifact metadata, remove full source lines
+whose first character is `#`, and copy the remaining maintained
+`src/mktext.bash` implementation without introducing a template language,
+transpiler, general-purpose minifier, or modular source assembly requirement.
+
+The comment-removal transform SHALL be equivalent to:
+
+```text
+sed '/^#/d'
+```
+
+The generated shebang and generated artifact-identification comments SHALL be
+emitted by Make before that transform and SHALL therefore remain present in the
+distribution artifact.  Full-line comments originating in `src/mktext.bash`,
+including Doxygen documentation, SHALL NOT be copied into `dist/mktext.bash`.
+Inline comments and lines whose first character is not `#` SHALL remain
+unchanged.
+
+This transform is intentionally textual rather than Bash-syntax-aware.  A line
+beginning with `#` inside a here-document or another construct where that text is
+runtime data would also be removed.  Maintained source SHALL therefore avoid
+runtime-significant data lines beginning with `#` in constructs that cross the
+source-to-distribution boundary unless the build strategy is revisited and the
+behavior is covered explicitly by tests.
 
 The generated artifact SHALL embed:
 
@@ -182,6 +212,15 @@ then either require release-time source edits or would be absent from the
 artifact.  The demonstrated provenance and direct-invocation requirements now
 justify a narrow generated distribution copy.
 
+### Retain full source comments in the distribution artifact
+
+Copying the maintained source byte-for-byte after generated metadata keeps the
+build especially literal, but it duplicates Doxygen and maintainer-oriented
+commentary into the runtime artifact without changing runtime behavior.  The
+comments remain available in maintained source and generated reference
+material, so the consumer artifact benefits from the same narrow comment
+stripping already used by Bootstrap.
+
 ### Add a separate CLI wrapper
 
 A wrapper could provide help and version discovery while leaving the library
@@ -194,7 +233,7 @@ a second program is unnecessary.
 
 Bootstrap benefits from concatenating many responsibility-specific files.
 `mktext` does not currently have that growth pressure.  One maintained source
-file copied into one generated artifact is sufficient.
+file filtered into one generated artifact is sufficient.
 
 ### Commit both source and generated release files
 
@@ -226,6 +265,11 @@ sourceable and executable file under `dist/`.
 A release artifact can identify its semantic version and source revision without
 runtime Git access or source inspection.
 
+Doxygen and maintainer-oriented full-line comments remain available in source and
+reference documentation without increasing the consumer artifact.  The generated
+artifact retains its shebang and generated provenance comments so consumers can
+still identify how it was produced.
+
 A user can run the release artifact directly to discover usage and build identity
 before deciding whether or how to source it.
 
@@ -233,15 +277,24 @@ Callers that use associative-array contexts continue to source the artifact so
 those operations execute in the shell that owns the context.
 
 The generated file becomes an object that must be validated in both sourced and
-direct-execution modes, not merely a copy step assumed to be correct.
+direct-execution modes, including verification that generated header comments
+remain while source full-line comments are absent.
 
 The build remains small enough to inspect directly and does not create pressure
 to split the implementation into modules prematurely.
+
+The textual comment filter constrains future maintained source: runtime data that
+must preserve a leading `#` at column zero cannot be represented inside a
+filtered here-document without revisiting this build decision.
 
 ## Open Questions and Follow-Ups
 
 Checksums and provenance attestations may be added independently if the release
 verification policy later requires them.
+
+If future implementation work requires runtime-significant here-document data
+whose lines begin with `#`, the project should replace or narrow the textual
+comment filter rather than silently changing that data.
 
 ## Related Decisions
 
