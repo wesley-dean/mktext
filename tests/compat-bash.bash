@@ -152,6 +152,40 @@ if [[ -x ${MKTEXT_LIBRARY} ]]; then
   check_status 2 "${status}" 'direct missing operation status'
 fi
 
+compat_tmpdir="${TMPDIR:-/tmp}/mktext-compat-$$"
+rm -rf "${compat_tmpdir}"
+mkdir -p "${compat_tmpdir}"
+
+extensionless="${compat_tmpdir}/mktext"
+{
+  printf '%s\n' '#!/usr/bin/env bash'
+  cat "${MKTEXT_LIBRARY}"
+} >"${extensionless}"
+chmod 0755 "${extensionless}"
+
+output=''
+status=0
+capture output status "${extensionless}" --help
+check_status 0 "${status}" 'extensionless direct help status'
+check_equal "${help_output}" "${output}" 'extensionless direct help output'
+
+embedded="${compat_tmpdir}/adrctl"
+{
+  printf '%s\n' '#!/usr/bin/env bash'
+  cat "${MKTEXT_LIBRARY}"
+  printf '\n'
+  printf '%s\n' 'printf '\''adrctl:%s\n'\'' "$*"'
+} >"${embedded}"
+chmod 0755 "${embedded}"
+
+output=''
+status=0
+capture output status "${embedded}" --version
+check_status 0 "${status}" 'embedded adrctl status'
+check_equal 'adrctl:--version' "${output}" 'embedded adrctl output'
+
+rm -rf "${compat_tmpdir}"
+
 # Context variables are consumed indirectly by name through the public API.
 # shellcheck disable=SC2034
 declare -A context=()

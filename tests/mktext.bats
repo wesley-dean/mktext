@@ -420,3 +420,108 @@ teardown() {
   run bash -c 'source "$1"; mktext --version >/dev/full' _ "${MKTEXT_LIBRARY}"
   [ "${status}" -eq 4 ]
 }
+
+@test "direct execution as mktext.bash dispatches the public command" {
+  executable="${TEST_TMPDIR}/mktext.bash"
+  {
+    printf '%s\n' '#!/usr/bin/env bash'
+    cat "${MKTEXT_LIBRARY}"
+  } >"${executable}"
+  chmod 0755 "${executable}"
+
+  run "${executable}" --help
+
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == Usage:* ]]
+}
+
+@test "direct execution as mktext dispatches the public command" {
+  executable="${TEST_TMPDIR}/mktext"
+  {
+    printf '%s\n' '#!/usr/bin/env bash'
+    cat "${MKTEXT_LIBRARY}"
+  } >"${executable}"
+  chmod 0755 "${executable}"
+
+  run "${executable}" --version
+
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == mktext\ * ]]
+  [[ "${output}" == *$'\n'build_date=* ]]
+  [[ "${output}" == *$'\n'commit=* ]]
+}
+
+@test "sourcing with process arguments does not dispatch" {
+  run bash -c 'library=$1; set -- --version; source "$library"; printf "%s" sourced' _ "${MKTEXT_LIBRARY}"
+
+  [ "${status}" -eq 0 ]
+  [ "${output}" = 'sourced' ]
+}
+
+@test "concatenated mktext remains inert inside adrctl" {
+  executable="${TEST_TMPDIR}/adrctl"
+  {
+    printf '%s\n' '#!/usr/bin/env bash'
+    cat "${MKTEXT_LIBRARY}"
+    printf '\n'
+    printf '%s\n' 'printf '\''adrctl:%s\n'\'' "$*"'
+  } >"${executable}"
+  chmod 0755 "${executable}"
+
+  run "${executable}" --version
+
+  [ "${status}" -eq 0 ]
+  [ "${output}" = 'adrctl:--version' ]
+}
+
+@test "concatenated mktext remains inert through an adr symlink" {
+  executable="${TEST_TMPDIR}/adrctl"
+  link="${TEST_TMPDIR}/adr"
+  {
+    printf '%s\n' '#!/usr/bin/env bash'
+    cat "${MKTEXT_LIBRARY}"
+    printf '\n'
+    printf '%s\n' 'printf '\''adr:%s\n'\'' "$*"'
+  } >"${executable}"
+  chmod 0755 "${executable}"
+  ln -s "${executable}" "${link}"
+
+  run "${link}" --version
+
+  [ "${status}" -eq 0 ]
+  [ "${output}" = 'adr:--version' ]
+}
+
+@test "mktext in a directory name does not claim the process entrypoint" {
+  directory="${TEST_TMPDIR}/mktext-testing"
+  executable="${directory}/adrctl"
+  mkdir -p "${directory}"
+  {
+    printf '%s\n' '#!/usr/bin/env bash'
+    cat "${MKTEXT_LIBRARY}"
+    printf '\n'
+    printf '%s\n' 'printf '\''outer:%s\n'\'' "$*"'
+  } >"${executable}"
+  chmod 0755 "${executable}"
+
+  run "${executable}" --help
+
+  [ "${status}" -eq 0 ]
+  [ "${output}" = 'outer:--help' ]
+}
+
+@test "unsupported renamed copies remain inert" {
+  executable="${TEST_TMPDIR}/mktext-old"
+  {
+    printf '%s\n' '#!/usr/bin/env bash'
+    cat "${MKTEXT_LIBRARY}"
+    printf '\n'
+    printf '%s\n' "printf 'outer reached\\n'"
+  } >"${executable}"
+  chmod 0755 "${executable}"
+
+  run "${executable}" --version
+
+  [ "${status}" -eq 0 ]
+  [ "${output}" = 'outer reached' ]
+}
