@@ -397,7 +397,6 @@ __mktext_render() {
 
   while :; do
     __mktext_line=''
-
     if IFS= read -r __mktext_line; then
       __mktext_read_status=0
     else
@@ -644,17 +643,24 @@ mktext() {
   return 2
 }
 
-## @brief Dispatches process arguments only when this file is executed directly.
+## @brief Dispatches process arguments only for supported mktext executables.
 ## @details
 ## A generated `dist/mktext.bash` artifact is both sourceable and executable.
 ## `BASH_SOURCE[0]` differs from `$0` when sourced, so this guard leaves the
-## caller's shell untouched in library mode.  When executed, the same public
-## dispatcher handles the process arguments and its return status becomes the
-## process exit status.
+## caller's shell untouched in library mode.  Concatenated embedding can make
+## those values equal inside another executable, so process ownership also
+## requires the invocation basename to be exactly `mktext` or `mktext.bash`.
+## Other basenames leave the library inert at top level.  When both checks pass,
+## the public dispatcher handles the process arguments and its return status
+## becomes the process exit status.
 if [[ ${BASH_SOURCE[0]} == "$0" ]]; then
-  if mktext "$@"; then
-    exit 0
-  else
-    exit $?
-  fi
+  case ${0##*/} in
+    mktext | mktext.bash)
+      if mktext "$@"; then
+        exit 0
+      else
+        exit $?
+      fi
+      ;;
+  esac
 fi

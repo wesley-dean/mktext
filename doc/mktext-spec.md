@@ -45,6 +45,18 @@ forms.  Direct execution SHALL dispatch the process arguments through the same
 public `mktext` function and SHALL terminate the process with the status returned
 by that dispatcher.
 
+Automatic process dispatch SHALL occur only when the containing file is being
+executed directly and the invocation basename `${0##*/}` is exactly `mktext.bash`
+or `mktext`.  A source copy concatenated into or otherwise executed under a
+different basename SHALL define the library without dispatching process arguments
+or terminating the containing program.  The decision SHALL use the basename only;
+directory components containing the string `mktext` SHALL have no effect.
+
+Invocation through a symbolic link SHALL use the basename visible in `$0`.  A
+link named `mktext` therefore opts into direct `mktext` command behavior, while a
+link such as `adr` to a larger executable containing embedded `mktext` SHALL leave
+the embedded library inert at top level.
+
 Because Bash associative arrays are shell-local state and cannot be exported as
 ordinary environment variables, stateful context operations are designed for
 sourced use rather than for manipulating a parent shell from a child process.
@@ -750,8 +762,8 @@ The following are public compatibility surfaces:
 - the public `mktext` function name;
 - operation names, aliases, arity, and render option syntax;
 - help and version output contracts;
-- direct execution of the generated distribution artifact for context-free
-  informational forms;
+- direct execution under the supported `mktext.bash` and `mktext` invocation
+  basenames for context-free informational forms;
 - executable mode and interpreter entry point of `dist/mktext.bash`;
 - context requirements and the reserved private prefix;
 - readonly-context mutation behavior;

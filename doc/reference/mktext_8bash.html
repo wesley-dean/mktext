@@ -128,7 +128,7 @@ Variables</h2></td></tr>
 <tr class="memitem:a0e6fd5ea141e380cfa117c0934d0739e" id="r_a0e6fd5ea141e380cfa117c0934d0739e"><td class="memItemLeft" align="right" valign="top">String&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a0e6fd5ea141e380cfa117c0934d0739e">__mktext_build_commit</a></td></tr>
 <tr class="memdesc:a0e6fd5ea141e380cfa117c0934d0739e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Abbreviated source commit embedded in a generated artifact.  <br /></td></tr>
 <tr class="memitem:a380ad58aa1c1822ffd691f01af9513b9" id="r_a380ad58aa1c1822ffd691f01af9513b9"><td class="memItemLeft" align="right" valign="top">String&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a380ad58aa1c1822ffd691f01af9513b9">if</a></td></tr>
-<tr class="memdesc:a380ad58aa1c1822ffd691f01af9513b9"><td class="mdescLeft">&#160;</td><td class="mdescRight">Dispatches process arguments only when this file is executed directly.  <br /></td></tr>
+<tr class="memdesc:a380ad58aa1c1822ffd691f01af9513b9"><td class="mdescLeft">&#160;</td><td class="mdescRight">Dispatches process arguments only for supported mktext executables.  <br /></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>Provides deterministic named text substitution for Bash callers. </p>
@@ -632,8 +632,8 @@ Variables</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
-<p>Dispatches process arguments only when this file is executed directly. </p>
-<p>A generated <span class="tt">dist/mktext.bash</span> artifact is both sourceable and executable. <span class="tt">BASH_SOURCE[0]</span> differs from <span class="tt">$0</span> when sourced, so this guard leaves the caller's shell untouched in library mode. When executed, the same public dispatcher handles the process arguments and its return status becomes the process exit status.</p>
+<p>Dispatches process arguments only for supported mktext executables. </p>
+<p>A generated <span class="tt">dist/mktext.bash</span> artifact is both sourceable and executable. <span class="tt">BASH_SOURCE[0]</span> differs from <span class="tt">$0</span> when sourced, so this guard leaves the caller's shell untouched in library mode. Concatenated embedding can make those values equal inside another executable, so process ownership also requires the invocation basename to be exactly <span class="tt"><a class="el" href="#afc4850579a45a4124eb43ec2099c6f87" title="Dispatches the complete public mktext API.">mktext</a></span> or <span class="tt"><a class="el" href="mktext_8bash.html" title="Provides deterministic named text substitution for Bash callers.">mktext.bash</a></span>. Other basenames leave the library inert at top level. When both checks pass, the public dispatcher handles the process arguments and its return status becomes the process exit status.</p>
 <p>Bash variable: read-write string </p>
 
 </div>
