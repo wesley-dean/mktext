@@ -57,6 +57,14 @@ The equivalent word forms are also available:
 ./dist/mktext.bash version
 ```
 
+Direct process dispatch is intentionally limited to executables invoked with the
+basename `mktext.bash` or `mktext`.  This keeps the normal `mktext` command
+behavior while allowing the same source to be concatenated into a larger Bash
+executable without claiming that program's entry point.  Arbitrarily renamed
+copies, or embedded copies reached through names such as `adr` or `adrctl`,
+remain inert at top level.  Directory names containing `mktext` do not affect
+this decision.
+
 Source the release artifact when using caller-owned associative-array contexts:
 
 ```bash
