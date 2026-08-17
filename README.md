@@ -4,6 +4,7 @@
 [![MegaLinter](https://github.com/wesley-dean/mktext/actions/workflows/megalinter.yml/badge.svg)](https://github.com/wesley-dean/mktext/actions/workflows/megalinter.yml)
 [![Scorecard supply-chain security](https://github.com/wesley-dean/mktext/actions/workflows/scorecard.yml/badge.svg)](https://github.com/wesley-dean/mktext/actions/workflows/scorecard.yml)
 [![Tests](https://github.com/wesley-dean/mktext/actions/workflows/test.yml/badge.svg)](https://github.com/wesley-dean/mktext/actions/workflows/test.yml)
+[![Documentation](https://github.com/wesley-dean/mktext/actions/workflows/static.yml/badge.svg)](https://github.com/wesley-dean/mktext/actions/workflows/static.yml)
 
 `mktext` is a tiny deterministic Bash text-substitution library.
 
@@ -267,6 +268,10 @@ also invoking the development test toolchain.
 
 `make test` exercises the public behavior suite against both the maintained
 source and the generated distribution artifact.
+
+`make docs` generates the ignored `doc/reference/` site locally.  The Pages
+workflow regenerates the same output from `main` and deploys it directly without
+committing generated documentation to the repository.
 
 Bats is the primary behavior-test framework.  ShellCheck and shfmt are the
 canonical Bash static-analysis and formatting tools.
