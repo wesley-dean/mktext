@@ -1,5 +1,10 @@
 # mktext
 
+[![Dependabot Updates](https://github.com/wesley-dean/mktext/actions/workflows/dependabot/dependabot-updates/badge.svg)](https://github.com/wesley-dean/mktext/actions/workflows/dependabot/dependabot-updates)
+[![MegaLinter](https://github.com/wesley-dean/mktext/actions/workflows/megalinter.yml/badge.svg)](https://github.com/wesley-dean/mktext/actions/workflows/megalinter.yml)
+[![Scorecard supply-chain security](https://github.com/wesley-dean/mktext/actions/workflows/scorecard.yml/badge.svg)](https://github.com/wesley-dean/mktext/actions/workflows/scorecard.yml)
+[![Tests](https://github.com/wesley-dean/mktext/actions/workflows/test.yml/badge.svg)](https://github.com/wesley-dean/mktext/actions/workflows/test.yml)
+
 `mktext` is a tiny deterministic Bash text-substitution library.
 
 It replaces named macros such as `{TITLE}` or `{NUMBER4}` with literal values
