@@ -113,12 +113,10 @@ $(DOXYGEN_BASH_FILTER):
 	mv "$@.tmp" "$@"
 
 ##
-# Remove generated reference documentation while preserving its README sentinel.
+# Remove generated reference documentation completely.
 #
 docs-clean:
-	@if [[ -d "$(REFERENCE_DOC_DIR)" ]]; then \
-		find "$(REFERENCE_DOC_DIR)" -mindepth 1 ! -name README.md -exec rm -rf {} +; \
-	fi
+	rm -rf "$(REFERENCE_DOC_DIR)"
 
 ##
 # Generate browsable Doxygen reference documentation.
