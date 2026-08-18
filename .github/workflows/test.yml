@@ -39,6 +39,9 @@ jobs:
       - name: Build compatibility artifact
         run: make all VERSION=0.0.0-ci
 
+      - name: Verify build did not materialize documentation dependencies
+        run: test ! -e vendor
+
       - name: Verify minimum Bash version
         run: |
           docker run --rm \
@@ -46,3 +49,60 @@ jobs:
             --workdir /work \
             bash:4.3 \
             bash -c 'MKTEXT_LIBRARY=src/mktext.bash bash tests/compat-bash.bash && MKTEXT_LIBRARY=dist/mktext.bash bash tests/compat-bash.bash'
+
+  docs:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # pin@v4
+
+      - name: Install documentation dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes curl doxygen
+
+      - name: Verify clean consumer build does not acquire dependencies
+        run: |
+          make build VERSION=0.0.0-ci
+          test -x dist/mktext.bash
+          test ! -e vendor
+          rm -rf dist
+
+      - name: Synchronize and verify documentation dependencies
+        run: |
+          make deps
+          make deps-check
+          test -x vendor/bashdeps.bash
+          test -f vendor/doxygen-bash.awk
+
+      - name: Verify stale documentation dependency convergence
+        run: |
+          expected="$(sha256sum vendor/doxygen-bash.awk | awk '{print $1}')"
+          printf '%s\n' 'tampered documentation dependency' >vendor/doxygen-bash.awk
+          if make deps-check; then
+            printf '%s\n' 'deps-check unexpectedly accepted tampered dependency bytes' >&2
+            exit 1
+          fi
+          grep -Fxq 'tampered documentation dependency' vendor/doxygen-bash.awk
+          make deps
+          make deps-check
+          actual="$(sha256sum vendor/doxygen-bash.awk | awk '{print $1}')"
+          test "${actual}" = "${expected}"
+
+      - name: Generate reference documentation
+        run: |
+          make docs
+          make deps-check
+
+      - name: Verify generated documentation state
+        run: |
+          test -f doc/reference/index.html
+          git check-ignore -q doc/reference/index.html
+          test -z "$(git status --porcelain --untracked-files=all -- doc/reference vendor)"
+
+      - name: Verify clean removes generated dependency state
+        run: |
+          make clean
+          test ! -e vendor
+          test ! -e dist
+          test ! -e doc/reference
