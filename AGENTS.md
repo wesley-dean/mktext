@@ -57,6 +57,14 @@ Do not invent rationale when the repository does not establish it.
 - `src/mktext.bash` is the maintained implementation.
 - `dist/mktext.bash` is the generated, sourceable release artifact.
 - Build metadata is injected at build time and does not add runtime Git access.
+- `make build` and `make all` do not acquire, synchronize, or verify external
+  documentation dependencies.
+- Make directly bootstraps only the pinned released `vendor/bashdeps.bash` used by
+  documentation dependency management.
+- Ordinary externally acquired repository artifacts are declared in
+  `dependencies.txt` and synchronized by bashdeps under ADR-016.
+- The current manifest-managed artifact is only the Bash Doxygen filter used by
+  `make docs`.
 - One public `mktext` function dispatches context, rendering, help, and version
   forms.
 - Callers own Bash associative-array contexts.
@@ -81,6 +89,7 @@ Development:
 - Bats
 - ShellCheck
 - shfmt
+- bashdeps for exact external documentation artifacts
 - Doxygen-compatible source documentation
 - GitHub Actions
 
@@ -90,7 +99,7 @@ Prefer small, readable Bash functions with explicit responsibilities.
 
 Avoid `eval` categorically in rendering or context handling.
 
-Do not `source` template or context data.
+Do not `source` template, context, or dependency-manifest data.
 
 Do not use command substitution, parameter expansion, or shell parsing to
 interpret template content.
@@ -112,13 +121,53 @@ Treat `src/mktext.bash` as the source of truth.  Do not edit generated
 `dist/mktext.bash` directly.
 
 Keep the build step narrow: inject metadata and copy maintained source.  Do not
-introduce modular assembly, minification, transpilation, or another template
-language without a demonstrated need and an architectural decision.
+introduce modular assembly, minification, transpilation, another template
+language, dependency synchronization, or documentation tooling into the consumer
+build without a demonstrated need and an architectural decision.
+
+`make build` and `make all` SHALL remain network-free with respect to project
+artifact acquisition.  They do not require bashdeps, `dependencies.txt`, or the
+`vendor/` tree.  A clean checkout can build the consumer artifact without
+preparing documentation dependencies.
+
+External documentation inputs are prepared separately:
+
+```text
+make deps
+```
+
+may bootstrap the pinned released `vendor/bashdeps.bash` and synchronize the
+committed `dependencies.txt` manifest.  Make directly owns only that one bootstrap
+artifact.  The bootstrap is pinned by immutable release URL and SHA-256 digest and
+is deliberately excluded from its own consumer manifest.
+
+```text
+make deps-check
+```
+
+verifies the already-present bootstrap and manifest-managed dependency state
+without network access or repair.  Do not make `deps-check` depend on the bootstrap
+file target, because that would silently turn verification into acquisition.
+
+The current manifest contains only `vendor/doxygen-bash.awk`.  `make docs` invokes
+`make deps` because reference generation needs that filter.  Do not reintroduce a
+direct moving `main`/`master` download path for the filter or duplicate substantial
+bashdeps policy in Make.
+
+Treat `dependencies.txt` as reviewed project source and `vendor/` as ignored,
+generated dependency state.  Digest equality, not the destination filename,
+defines acceptable external bytes.  Download candidates must be verified before
+publication, and acquisition failure must not replace an existing file with
+unverified bytes.
 
 Release versions come from the semantic-version workflow and are passed
 explicitly to Make.  Development builds use the documented development version.
 Commit metadata and the build date are derived from the source revision when Git
 metadata is available.
+
+The released `dist/mktext.bash` artifact must remain independent of bashdeps,
+`dependencies.txt`, the Doxygen filter, and `vendor/`.  The release workflow does
+not prepare documentation dependencies merely to build the consumer artifact.
 
 Tests must cover both maintained source and generated distribution behavior.
 
@@ -149,9 +198,10 @@ Follow the documentation-driven philosophy established by the ADRs.
 Documentation should explain intent, assumptions, constraints, safety posture,
 observable behavior, and non-goals where appropriate.
 
-Source-code documentation follows ADR-011.  When a documentation-only source
-change is requested, preserve executable lines verbatim and verify that only
-comments changed.
+Source-code documentation follows ADR-011.  Documentation generation and its
+external dependency lifecycle follow ADR-015 and ADR-016.  When a
+documentation-only source change is requested, preserve executable lines verbatim
+and verify that only comments changed.
 
 When intent cannot be established confidently, expose the ambiguity rather than
 writing plausible-sounding rationale.
@@ -163,7 +213,8 @@ The project follows documentation-driven, test-second development.
 Documentation establishes intent.  Implementation realizes it.  Automated tests
 then verify observable behavior.
 
-Use Bats for the primary behavior suite.
+Use Bats for the primary behavior suite and for repository build/dependency
+boundary regression coverage.
 
 Tests should exercise the public `mktext` function rather than private helper
 structure whenever practical.
@@ -171,6 +222,11 @@ structure whenever practical.
 Run the behavior suite against both `src/mktext.bash` and the generated
 `dist/mktext.bash`.  The generated artifact is a product artifact and must not be
 assumed correct merely because its maintained source passed tests.
+
+Build/dependency tests should verify observable Make contracts rather than private
+bashdeps internals.  In particular, protect the facts that `build` and `all` do not
+materialize documentation dependency state, `deps-check` does not repair state,
+and the literal consumer artifact works after the dependency tree is removed.
 
 Every functional change should prompt these questions:
 
@@ -194,8 +250,12 @@ When practical:
 - run the relevant Make targets;
 - run Bash syntax validation;
 - run Bats tests against source and distribution artifacts;
+- run the build/dependency boundary tests;
 - run ShellCheck and shfmt checks on maintained source;
+- use `make deps` and `make deps-check` when documentation dependency state is in
+  scope;
 - generate or validate documentation when documentation inputs change;
+- verify a clean `make build` does not materialize `vendor/`;
 - verify generated artifact metadata when build behavior changes;
 - verify documentation-only source changes did not alter executable lines.
 
@@ -209,6 +269,13 @@ Avoid:
 - editing `dist/mktext.bash` as though it were maintained source;
 - releasing a distribution artifact carrying stale or mismatched version
   metadata;
+- coupling `make build` or `make all` to documentation dependency acquisition;
+- making `make deps-check` bootstrap, download, or repair dependency state;
+- placing `vendor/bashdeps.bash` in `dependencies.txt` and creating a bootstrap
+  cycle;
+- reintroducing direct Makefile acquisition for manifest-managed dependencies;
+- using moving dependency URLs when an immutable release or tag is available;
+- trusting a dependency filename or version label instead of the committed digest;
 - adding transformations because they appear convenient;
 - using `eval` or shell expansion for substitution;
 - rescanning replacement values and accidentally making rendering recursive;

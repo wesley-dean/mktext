@@ -252,26 +252,43 @@ The project follows documentation-driven, test-second development.
 Common development tasks are exposed through Make targets:
 
 ```bash
-make all          # build dist/mktext.bash only
-make build        # build dist/mktext.bash only
+make all          # build dist/mktext.bash only; no dependency acquisition
+make build        # build dist/mktext.bash only; no dependency acquisition
+make deps         # synchronize documentation dependencies; may use the network
+make deps-check   # verify prepared documentation dependencies offline
 make check        # syntax and static analysis
-make test         # test maintained source and generated distribution
+make test         # test behavior, distribution, and dependency boundaries
 make test-source
 make test-dist
+make test-build
 make format
-make docs
+make docs         # synchronize dependencies, then generate reference docs
 ```
 
-`make all` intentionally performs only the build.  Validation remains explicit
-through `make check` and `make test` so callers can build the artifact without
-also invoking the development test toolchain.
+`make all` and `make build` intentionally remain independent of documentation
+tooling.  A clean checkout can build the consumer artifact without bashdeps,
+`dependencies.txt`, or `vendor/` being needed at runtime or materialized as part
+of the build.
+
+`make deps` directly bootstraps one pinned, SHA-256-verified released
+`vendor/bashdeps.bash` when necessary, then uses that executable to synchronize
+the ordinary dependencies declared in `dependencies.txt`.  The bootstrap artifact
+is deliberately excluded from the manifest to avoid a circular dependency.
+
+The current manifest contains only the Bash Doxygen filter used by `make docs`.
+Its immutable tagged URL and expected SHA-256 digest are committed as reviewable
+project data.  `make deps-check` verifies the existing bootstrap and manifest
+state without network access or repair.
 
 `make test` exercises the public behavior suite against both the maintained
-source and the generated distribution artifact.
+source and the generated distribution artifact and also checks the build/dependency
+boundary.
 
-`make docs` generates the ignored `doc/reference/` site locally.  The Pages
-workflow regenerates the same output from `main` and deploys it directly without
-committing generated documentation to the repository.
+`make docs` may use the network because it invokes `make deps` before generating
+the ignored `doc/reference/` site.  The Pages workflow uses the same path from
+`main`, verifies the resulting dependency state, and deploys the generated site
+directly without committing generated documentation.  `vendor/` and
+`doc/reference/` remain ignored generated state and are removed by `make clean`.
 
 Bats is the primary behavior-test framework.  ShellCheck and shfmt are the
 canonical Bash static-analysis and formatting tools.
