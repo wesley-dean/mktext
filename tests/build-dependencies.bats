@@ -85,6 +85,8 @@ EOF
 }
 
 @test "build and all remain independent of documentation dependencies" {
+  rm -f "${FIXTURE_ROOT}/dependencies.txt"
+
   run make -C "${FIXTURE_ROOT}" build VERSION=0.0.0-test
   [ "${status}" -eq 0 ]
   [ -x "${FIXTURE_ROOT}/dist/mktext.bash" ]
