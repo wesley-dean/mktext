@@ -25,10 +25,26 @@ jobs:
       - name: Install test dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install --yes bats shellcheck
+          sudo apt-get install --yes bats curl shellcheck
 
-      - name: Run project validation
-        run: make check test
+      - name: Verify plain build does not acquire missing dependencies
+        run: |
+          if make build VERSION=0.0.0-ci >build.stdout 2>build.stderr; then
+            printf '%s\n' 'make build unexpectedly succeeded without the prepared minifier' >&2
+            exit 1
+          fi
+          grep -F 'Missing build dependency vendor/bash-minifier.bash; run make deps or make all' build.stderr
+          test ! -e vendor
+
+      - name: Synchronize and verify build dependencies
+        run: |
+          make deps
+          make deps-check
+          test -f vendor/bash-minifier.bash
+          test -f vendor/doxygen-bash.awk
+
+      - name: Run project validation across all artifact flavors
+        run: make check test VERSION=0.0.0-ci
 
   bash-4-3:
     runs-on: ubuntu-24.04
@@ -36,19 +52,22 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # pin@v4
 
-      - name: Build compatibility artifact
+      - name: Build all compatibility artifacts from synchronized dependencies
         run: make all VERSION=0.0.0-ci
 
-      - name: Verify build did not materialize documentation dependencies
-        run: test ! -e vendor
-
-      - name: Verify minimum Bash version
+      - name: Verify minimum Bash version across all flavors
         run: |
           docker run --rm \
             --volume "${GITHUB_WORKSPACE}:/work:ro" \
             --workdir /work \
             bash:4.3 \
-            bash -c 'MKTEXT_LIBRARY=src/mktext.bash bash tests/compat-bash.bash && MKTEXT_LIBRARY=dist/mktext.bash bash tests/compat-bash.bash'
+            bash -c '
+              MKTEXT_LIBRARY=src/mktext.bash bash tests/compat-bash.bash
+              for artifact in dist/mktext.dev.bash dist/mktext.bash dist/mktext.min.bash; do
+                MKTEXT_LIBRARY="$artifact" bash tests/compat-bash.bash
+                "$artifact" --version >/dev/null
+              done
+            '
 
   docs:
     runs-on: ubuntu-24.04
@@ -61,18 +80,21 @@ jobs:
           sudo apt-get update
           sudo apt-get install --yes curl doxygen
 
-      - name: Verify clean consumer build does not acquire dependencies
+      - name: Verify clean build does not repair the missing minifier
         run: |
-          make build VERSION=0.0.0-ci
-          test -x dist/mktext.bash
+          if make build VERSION=0.0.0-ci >build.stdout 2>build.stderr; then
+            printf '%s\n' 'make build unexpectedly succeeded without the prepared minifier' >&2
+            exit 1
+          fi
+          grep -F 'Missing build dependency vendor/bash-minifier.bash; run make deps or make all' build.stderr
           test ! -e vendor
-          rm -rf dist
 
-      - name: Synchronize and verify documentation dependencies
+      - name: Synchronize and verify project dependencies
         run: |
           make deps
           make deps-check
           test -x vendor/bashdeps.bash
+          test -f vendor/bash-minifier.bash
           test -f vendor/doxygen-bash.awk
 
       - name: Verify stale documentation dependency convergence
