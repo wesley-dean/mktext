@@ -13,20 +13,25 @@ SOURCE_LIBRARY := $(SRC_DIR)/mktext.bash
 DIST_LIBRARY := $(DIST_DIR)/mktext.bash
 
 TESTS_DIR := tests
-TEST_SCRIPTS := $(TESTS_DIR)/*.bats
+TEST_SCRIPTS := $(TESTS_DIR)/mktext.bats
+BUILD_DEPENDENCY_TEST := $(TESTS_DIR)/build-dependencies.bats
 COMPAT_TEST := $(TESTS_DIR)/compat-bash.bash
 SHELL_SCRIPTS := $(SOURCE_LIBRARY) $(COMPAT_TEST)
 
 VENDOR_DIR := vendor
+DEPENDENCY_MANIFEST := dependencies.txt
+BASHDEPS := $(VENDOR_DIR)/bashdeps.bash
+BASHDEPS_VERSION := 0.0.6
+BASHDEPS_URL := https://github.com/wesley-dean/bashdeps/releases/download/v$(BASHDEPS_VERSION)/bashdeps.bash
+BASHDEPS_SHA256 := bb6c807fa12c010950bda06172ac0611d278c57aca1f8352f41502d0d76b4e6c
 DOXYGEN_BASH_FILTER := $(VENDOR_DIR)/doxygen-bash.awk
-DOXYGEN_BASH_FILTER_URL := https://raw.githubusercontent.com/wesley-dean/bash-doxygen/refs/heads/main/doxygen-bash.awk
 REFERENCE_DOC_DIR := doc/reference
 
 VERSION ?= 0.0.0-dev
 BUILD_COMMIT ?= $(shell git rev-parse --short=12 HEAD 2>/dev/null || printf 'unknown')
 BUILD_DATE ?= $(shell git show -s --format=%cI HEAD 2>/dev/null || printf 'unknown')
 
-.PHONY: all build check clean docs docs-clean format test test-source test-dist
+.PHONY: all build check clean deps deps-check docs docs-clean FORCE format test test-build test-source test-dist verify-bashdeps
 
 all: build
 
@@ -37,7 +42,8 @@ all: build
 # This target is intentionally phony.  VERSION, BUILD_DATE, and BUILD_COMMIT are
 # build inputs rather than filesystem prerequisites, so regenerating the tiny
 # artifact on every invocation prevents stale development metadata from being
-# reused by a later release build.
+# reused by a later release build.  Documentation dependencies are deliberately
+# outside this build path.
 #
 build: $(SOURCE_LIBRARY)
 	mkdir -p "$(DIST_DIR)"
@@ -71,9 +77,9 @@ format:
 	shfmt -w -i 2 -ci $(SHELL_SCRIPTS)
 
 ##
-# Run the behavior suite against maintained source and generated distribution.
+# Run public behavior, generated-artifact, and dependency-boundary tests.
 #
-test: test-source test-dist
+test: test-source test-dist test-build
 
 ##
 # Run observable-behavior tests directly against maintained source.
@@ -104,13 +110,92 @@ test-dist: build
 	MKTEXT_LIBRARY="$(DIST_LIBRARY)" bash $(COMPAT_TEST)
 
 ##
-# Download the Bash Doxygen filter used to preprocess shell source files.
+# Exercise documentation-dependency bootstrap, verification, and isolation rules.
 #
-$(DOXYGEN_BASH_FILTER):
-	mkdir -p "$(VENDOR_DIR)"
-	curl -fsSL "$(DOXYGEN_BASH_FILTER_URL)" -o "$@.tmp"
-	chmod 0755 "$@.tmp"
-	mv "$@.tmp" "$@"
+test-build:
+	bats "$(BUILD_DEPENDENCY_TEST)"
+
+##
+# Force the bootstrap file target to validate cached bytes whenever requested.
+#
+FORCE:
+
+##
+# Bootstrap the pinned released bashdeps executable used to process dependencies.txt.
+#
+# Make directly owns only this bootstrap dependency.  Correct cached bytes avoid
+# network access.  Missing or mismatched bytes are replaced only after a staged
+# download matches the committed SHA-256 digest.
+#
+$(BASHDEPS): FORCE
+	@mkdir -p "$(VENDOR_DIR)"
+	@verify_hash() { \
+		path=$$1; \
+		if command -v sha256sum >/dev/null 2>&1; then \
+			printf '%s  %s\n' "$(BASHDEPS_SHA256)" "$$path" | sha256sum -c - >/dev/null 2>&1; \
+		elif command -v shasum >/dev/null 2>&1; then \
+			actual="$$(shasum -a 256 "$$path" | awk '{print $$1}')"; \
+			[[ "$$actual" == "$(BASHDEPS_SHA256)" ]]; \
+		else \
+			return 2; \
+		fi; \
+	}; \
+	if ! command -v sha256sum >/dev/null 2>&1 && ! command -v shasum >/dev/null 2>&1; then \
+		printf '%s\n' 'No SHA-256 verification command is available for bashdeps.bash' >&2; \
+		exit 1; \
+	fi; \
+	if [[ -f "$@" && ! -L "$@" ]] && verify_hash "$@"; then \
+		chmod 0755 "$@"; \
+		exit 0; \
+	fi; \
+	if ! command -v curl >/dev/null 2>&1; then \
+		printf '%s\n' 'curl is required to bootstrap bashdeps.bash' >&2; \
+		exit 1; \
+	fi; \
+	tmp="$@.tmp"; \
+	rm -f "$$tmp"; \
+	trap 'rm -f "$$tmp"' EXIT; \
+	curl -fsSL "$(BASHDEPS_URL)" -o "$$tmp"; \
+	if ! verify_hash "$$tmp"; then \
+		printf '%s\n' 'Downloaded bashdeps.bash does not match the committed SHA-256 digest' >&2; \
+		exit 1; \
+	fi; \
+	chmod 0755 "$$tmp"; \
+	mv "$$tmp" "$@"; \
+	trap - EXIT
+
+##
+# Verify the already-present bashdeps bootstrap without network access or repair.
+#
+verify-bashdeps:
+	@test -x "$(BASHDEPS)" && test ! -L "$(BASHDEPS)" || { \
+		printf '%s\n' 'Missing, non-executable, or unsafe bashdeps bootstrap; run make deps' >&2; \
+		exit 1; \
+	}
+	@if command -v sha256sum >/dev/null 2>&1; then \
+		printf '%s  %s\n' "$(BASHDEPS_SHA256)" "$(BASHDEPS)" | sha256sum -c - >/dev/null; \
+	elif command -v shasum >/dev/null 2>&1; then \
+		actual="$$(shasum -a 256 "$(BASHDEPS)" | awk '{print $$1}')"; \
+		[[ "$$actual" == "$(BASHDEPS_SHA256)" ]]; \
+	else \
+		printf '%s\n' 'No SHA-256 verification command is available for bashdeps.bash' >&2; \
+		exit 1; \
+	fi
+
+##
+# Synchronize manifest-managed documentation dependencies through bashdeps.
+#
+# This target may use the network.  It is deliberately separate from build/all.
+#
+deps: $(BASHDEPS) $(DEPENDENCY_MANIFEST)
+	$(MAKE) --no-print-directory verify-bashdeps
+	"$(BASHDEPS)" sync "$(DEPENDENCY_MANIFEST)"
+
+##
+# Verify bootstrap and manifest-managed dependency state without network repair.
+#
+deps-check: verify-bashdeps $(DEPENDENCY_MANIFEST)
+	"$(BASHDEPS)" verify "$(DEPENDENCY_MANIFEST)"
 
 ##
 # Remove generated reference documentation completely.
@@ -121,11 +206,14 @@ docs-clean:
 ##
 # Generate browsable Doxygen reference documentation.
 #
-docs: docs-clean $(DOXYGEN_BASH_FILTER)
+# The Bash Doxygen filter is a manifest-managed data artifact.  This consumer
+# target owns the executable mode Doxygen needs rather than asking bashdeps to
+# infer artifact semantics.
+#
+docs: docs-clean deps
+	chmod 0755 "$(DOXYGEN_BASH_FILTER)"
 	mkdir -p "$(REFERENCE_DOC_DIR)"
 	doxygen Doxyfile
 
 clean: docs-clean
-	rm -rf "$(DIST_DIR)"
-	$(RM) -f "$(DOXYGEN_BASH_FILTER)"
-	-rmdir "$(VENDOR_DIR)" >/dev/null 2>&1
+	rm -rf "$(DIST_DIR)" "$(VENDOR_DIR)"
