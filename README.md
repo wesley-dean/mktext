@@ -37,41 +37,53 @@ does not claim binary-safe behavior.
 
 The maintained implementation lives at `src/mktext.bash`.
 
-`make build` or `make all` generates the canonical consumer artifact:
+A prepared build produces three sourceable and executable consumer flavors:
 
 ```text
+dist/mktext.dev.bash
 dist/mktext.bash
+dist/mktext.min.bash
 ```
 
-The generated artifact is executable and sourceable.  It begins with an
-`#!/usr/bin/env bash` interpreter directive, is created with mode `0755`, and
-embeds its semantic version, source-revision timestamp, and source commit.
+`mktext.dev.bash` retains the complete maintained source comments and is the most
+convenient generated artifact for inspection and debugging.  `mktext.bash` is the
+conventional distribution artifact with full-line maintained comments removed.
+`mktext.min.bash` is produced by running the pinned Bash-Minifier dependency over
+`mktext.bash`.
+
+All three artifacts begin with an `#!/usr/bin/env bash` interpreter directive,
+are created with mode `0755`, embed the same semantic version, source-revision
+timestamp, and source commit, and implement the same public mktext behavior.
 `dist/` is generated output and is not maintained as a second source copy.
 
-Help and version information can be inspected directly without sourcing the
-library:
+Each Bash artifact has a companion SHA-256 check file:
+
+```text
+dist/mktext.dev.bash.256
+dist/mktext.bash.256
+dist/mktext.min.bash.256
+```
+
+The `.256` files use the conventional `sha256sum`/`shasum -a 256` check-file
+format and name the corresponding artifact basename.
+
+Help and version information can be inspected directly without sourcing any
+flavor, for example:
 
 ```bash
+./dist/mktext.dev.bash --version
 ./dist/mktext.bash --help
-./dist/mktext.bash --version
+./dist/mktext.min.bash --version
 ```
 
-The equivalent word forms are also available:
+Direct process dispatch is intentionally limited to supported mktext executable
+names: `mktext`, `mktext.bash`, `mktext.dev.bash`, and `mktext.min.bash`.  This
+keeps the normal command behavior while allowing the same library code to be
+embedded in a differently named Bash executable without claiming that program's
+entry point.  Directory names containing `mktext` do not affect this decision.
 
-```bash
-./dist/mktext.bash help
-./dist/mktext.bash version
-```
-
-Direct process dispatch is intentionally limited to executables invoked with the
-basename `mktext.bash` or `mktext`.  This keeps the normal `mktext` command
-behavior while allowing the same source to be concatenated into a larger Bash
-executable without claiming that program's entry point.  Arbitrarily renamed
-copies, or embedded copies reached through names such as `adr` or `adrctl`,
-remain inert at top level.  Directory names containing `mktext` do not affect
-this decision.
-
-Source the release artifact when using caller-owned associative-array contexts:
+Source whichever release flavor best fits the consumer's needs when using
+caller-owned associative-array contexts:
 
 ```bash
 . ./dist/mktext.bash
@@ -81,8 +93,10 @@ Context operations execute in the current shell because Bash associative arrays
 are shell state and cannot be exported to a child process as ordinary environment
 variables.
 
-Published consumers should pin the `mktext.bash` asset from a tagged GitHub
-release rather than depending on the moving `main` branch.
+Published consumers should pin one of the three Bash assets from a tagged GitHub
+release rather than depending on the moving `main` branch.  The conventional
+`mktext.bash` flavor remains the default recommendation when neither retained
+comments nor minimum file size is a specific requirement.
 
 ## Basic Usage
 
@@ -145,8 +159,8 @@ the private `__mktext_` prefix.  Readonly associative arrays may be used with
 Invalid operation names, missing operations, and wrong argument counts return
 status 2 and print a concise diagnostic followed by usage information to
 standard error.  Explicit help requests print usage to standard output and
-return 0.  When the distribution artifact is executed directly, its process exit
-status is the status produced by the same `mktext` dispatcher.
+return 0.  When a supported generated artifact is executed directly, its process
+exit status is the status produced by the same `mktext` dispatcher.
 
 ## Macro Grammar
 
@@ -252,37 +266,40 @@ The project follows documentation-driven, test-second development.
 Common development tasks are exposed through Make targets:
 
 ```bash
-make all          # build dist/mktext.bash only; no dependency acquisition
-make build        # build dist/mktext.bash only; no dependency acquisition
-make deps         # synchronize documentation dependencies; may use the network
-make deps-check   # verify prepared documentation dependencies offline
+make deps         # synchronize build/development dependencies; may use the network
+make deps-check   # verify prepared dependency state offline
+make build        # offline build of all three Bash flavors and three checksums
+make all          # run deps first, then build all six artifacts
 make check        # syntax and static analysis
-make test         # test behavior, distribution, and dependency boundaries
+make test         # test source, all generated flavors, checksums, and dependency boundaries
 make test-source
-make test-dist
+make test-generated
 make test-build
 make format
 make docs         # synchronize dependencies, then generate reference docs
 ```
 
-`make all` and `make build` intentionally remain independent of documentation
-tooling.  A clean checkout can build the consumer artifact without bashdeps,
-`dependencies.txt`, or `vendor/` being needed at runtime or materialized as part
-of the build.
+`make build` intentionally performs no dependency acquisition or verification.  It
+requires a previously prepared `vendor/bash-minifier.bash` and fails with guidance
+to run `make deps` or `make all` when that build dependency is absent.  `make all`
+is the fresh-checkout convenience path and explicitly synchronizes dependencies
+before invoking the build.
 
 `make deps` directly bootstraps one pinned, SHA-256-verified released
 `vendor/bashdeps.bash` when necessary, then uses that executable to synchronize
 the ordinary dependencies declared in `dependencies.txt`.  The bootstrap artifact
 is deliberately excluded from the manifest to avoid a circular dependency.
 
-The current manifest contains only the Bash Doxygen filter used by `make docs`.
-Its immutable tagged URL and expected SHA-256 digest are committed as reviewable
-project data.  `make deps-check` verifies the existing bootstrap and manifest
-state without network access or repair.
+The manifest currently contains the commit-pinned Bash-Minifier artifact used by
+`make build` and the pinned Bash Doxygen filter used by `make docs`.  Their
+immutable URLs and expected SHA-256 digests are committed as reviewable project
+data.  `make deps-check` verifies the existing bootstrap and manifest state without
+network access or repair.
 
-`make test` exercises the public behavior suite against both the maintained
-source and the generated distribution artifact and also checks the build/dependency
-boundary.
+`make test` exercises the public behavior suite against maintained source and each
+of `mktext.dev.bash`, `mktext.bash`, and `mktext.min.bash`; verifies direct
+execution and Bash 4.3 compatibility; checks all three SHA-256 files; and exercises
+the build/dependency boundary.
 
 `make docs` may use the network because it invokes `make deps` before generating
 the ignored `doc/reference/` site.  The Pages workflow uses the same path from

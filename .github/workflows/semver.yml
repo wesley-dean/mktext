@@ -29,7 +29,12 @@ jobs:
       - name: Install validation dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install --yes bats shellcheck
+          sudo apt-get install --yes bats curl shellcheck
+
+      - name: Prepare and verify build dependencies
+        run: |
+          make deps
+          make deps-check
 
       - name: Validate distribution pipeline before versioning
         run: make check test VERSION=0.0.0-ci
@@ -42,13 +47,14 @@ jobs:
           initial_version: 0.0.1
           tag_prefix: v
 
-      - name: Build release artifact without documentation dependency state
-        run: |
-          make all VERSION="${{ steps.calculate-version.outputs.version-string }}"
-          test ! -e vendor
+      - name: Verify prepared dependencies before release build
+        run: make deps-check
 
-      - name: Validate release artifact
-        run: make test-dist VERSION="${{ steps.calculate-version.outputs.version-string }}"
+      - name: Build release artifacts
+        run: make build VERSION="${{ steps.calculate-version.outputs.version-string }}"
+
+      - name: Validate release artifacts
+        run: make test-generated VERSION="${{ steps.calculate-version.outputs.version-string }}"
 
       - name: Generate release notes
         id: release-notes
@@ -67,4 +73,10 @@ jobs:
           tag_name: "v${{ steps.calculate-version.outputs.version-string }}"
           draft: false
           prerelease: false
-          files: dist/mktext.bash
+          files: |
+            dist/mktext.dev.bash
+            dist/mktext.dev.bash.256
+            dist/mktext.bash
+            dist/mktext.bash.256
+            dist/mktext.min.bash
+            dist/mktext.min.bash.256
