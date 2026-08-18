@@ -1,7 +1,8 @@
 # Doxyfile
 #
 # Doxygen configuration for the mktext Bash library.  The Makefile docs target
-# downloads the Bash preprocessor filter before invoking this configuration.
+# prepares the manifest-managed Bash preprocessor filter before invoking this
+# configuration.
 
 PROJECT_NAME           = "mktext"
 PROJECT_BRIEF          = "Deterministic Bash text-substitution library"
