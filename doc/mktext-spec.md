@@ -44,17 +44,31 @@ created with mode `0755`, and its first line SHALL be:
 #!/usr/bin/env bash
 ```
 
-Each generated Bash artifact SHALL have a companion SHA-256 check file:
+Each generated Bash artifact SHALL have a companion SHA-256 checksum file:
 
 ```text
-dist/mktext.dev.bash.256
-dist/mktext.bash.256
-dist/mktext.min.bash.256
+dist/mktext.dev.bash.sha256
+dist/mktext.bash.sha256
+dist/mktext.min.bash.sha256
 ```
 
-Each `.256` file SHALL identify the SHA-256 digest of its corresponding Bash
+Each `.sha256` file SHALL identify the SHA-256 digest of its corresponding Bash
 artifact and SHALL name that artifact by basename so it can be verified from
 within `dist/` using the selected SHA-256 implementation.
+
+New releases SHALL publish only `.sha256` checksum companions.  Historical
+releases that published `.256` companions remain valid.  A consumer that
+explicitly retrieves release checksum sidecars MAY fall back from
+`<artifact>.sha256` to `<artifact>.256` only when the preferred asset is confirmed
+absent.  Transport, authorization, server, malformed-content, and
+checksum-verification failures SHALL remain failures rather than trigger legacy
+fallback.
+
+This checksum-sidecar compatibility does not alter repository dependency trust.
+The Make-owned bashdeps bootstrap and manifest-managed dependencies continue to
+be authorized by SHA-256 digests committed in repository source; a live
+`.sha256` or `.256` sidecar SHALL NOT dynamically replace committed trust data.
+See ADR-018.
 
 Consumers SHOULD source a generated release artifact for context and rendering
 operations.  `dist/mktext.bash` remains the conventional default when retained
@@ -813,7 +827,8 @@ The following are public compatibility surfaces:
 - public normal-return statuses and their documented Bash signal/input limits;
 - the sourceable `mktext.dev.bash`, `mktext.bash`, and `mktext.min.bash`
   distribution artifacts;
-- the association of each generated Bash artifact with its `.256` checksum file.
+- the association of each generated Bash artifact with its `.sha256` checksum
+  file.
 
 Changes to these surfaces require deliberate compatibility review and may
 require a new ADR and Semantic Versioning impact.
