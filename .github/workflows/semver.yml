@@ -75,8 +75,8 @@ jobs:
           prerelease: false
           files: |
             dist/mktext.dev.bash
-            dist/mktext.dev.bash.256
+            dist/mktext.dev.bash.sha256
             dist/mktext.bash
-            dist/mktext.bash.256
+            dist/mktext.bash.sha256
             dist/mktext.min.bash
-            dist/mktext.min.bash.256
+            dist/mktext.min.bash.sha256

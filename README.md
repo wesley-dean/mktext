@@ -56,16 +56,28 @@ are created with mode `0755`, embed the same semantic version, source-revision
 timestamp, and source commit, and implement the same public mktext behavior.
 `dist/` is generated output and is not maintained as a second source copy.
 
-Each Bash artifact has a companion SHA-256 check file:
+Each Bash artifact has a companion SHA-256 checksum file:
 
 ```text
-dist/mktext.dev.bash.256
-dist/mktext.bash.256
-dist/mktext.min.bash.256
+dist/mktext.dev.bash.sha256
+dist/mktext.bash.sha256
+dist/mktext.min.bash.sha256
 ```
 
-The `.256` files use the conventional `sha256sum`/`shasum -a 256` check-file
-format and name the corresponding artifact basename.
+The `.sha256` files use the conventional `sha256sum`/`shasum -a 256` check-file
+format and name the corresponding artifact basename.  New releases publish only
+`.sha256` checksum companions.  Historical releases that published `.256`
+companions remain unchanged.
+
+A tool that explicitly retrieves release checksum sidecars may try `.256` only
+when the preferred `.sha256` asset is confirmed absent.  Transport,
+authorization, server, malformed-content, and checksum-mismatch failures should
+fail rather than trigger a legacy fallback.
+
+This compatibility rule does not change mktext's dependency trust model.  The
+repository continues to accept externally acquired dependency bytes only when
+they match the SHA-256 digest committed in project source; a live `.sha256` or
+`.256` sidecar does not replace that committed authorization.
 
 Help and version information can be inspected directly without sourcing any
 flavor, for example:
@@ -315,6 +327,9 @@ canonical Bash static-analysis and formatting tools.
 Architecture Decision Records are stored in `doc/adr/`.
 
 The normative public behavior is documented in `doc/mktext-spec.md`.
+
+ADR-018 records the checksum companion naming and historical-read compatibility
+policy.
 
 AI-assisted contributors should also review `AGENTS.md` before making
 substantive changes.
