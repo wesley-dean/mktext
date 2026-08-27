@@ -155,7 +155,7 @@ prepare_fake_dependency_sources() {
 
   for artifact in mktext.dev.bash mktext.bash mktext.min.bash; do
     [ -x "${FIXTURE_ROOT}/dist/${artifact}" ]
-    [ -f "${FIXTURE_ROOT}/dist/${artifact}.256" ]
+    [ -f "${FIXTURE_ROOT}/dist/${artifact}.sha256" ]
   done
 }
 
@@ -181,7 +181,7 @@ prepare_fake_dependency_sources() {
 
   for artifact in mktext.dev.bash mktext.bash mktext.min.bash; do
     [ -x "${FIXTURE_ROOT}/dist/${artifact}" ]
-    [ -f "${FIXTURE_ROOT}/dist/${artifact}.256" ]
+    [ -f "${FIXTURE_ROOT}/dist/${artifact}.sha256" ]
   done
 }
 
