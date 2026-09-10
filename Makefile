@@ -311,7 +311,7 @@ adr-index:
 #
 docs-clean:
 	rm -rf "$(REFERENCE_DOC_DIR)"
-	rm -f "$(ADR_INDEX_FILE)" "$(ADR_INDEX_FILE).tmp"
+	rm -f "$(ADR_INDEX_FILE)" "$(ADR_INDEX_FILE).tmp" "$(ADR_INDEX_FILE).tmp."*
 
 ##
 # Generate browsable Doxygen reference documentation from prepared dependencies.
