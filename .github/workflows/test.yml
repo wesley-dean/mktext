@@ -42,6 +42,7 @@ jobs:
           make deps-check
           test -f vendor/bash-minifier.bash
           test -f vendor/doxygen-bash.awk
+          test -f vendor/adrctl.bash
 
       - name: Run project validation across all artifact flavors
         run: make check test VERSION=0.0.0-ci
@@ -89,6 +90,19 @@ jobs:
           grep -F 'Missing build dependency vendor/bash-minifier.bash; run make deps or make all' build.stderr
           test ! -e vendor
 
+      - name: Verify documentation does not acquire missing adrctl
+        run: |
+          mkdir -p vendor
+          printf '%s\n' '# prepared documentation filter' >vendor/doxygen-bash.awk
+          if make docs >docs.stdout 2>docs.stderr; then
+            printf '%s\n' 'make docs unexpectedly succeeded without prepared adrctl' >&2
+            exit 1
+          fi
+          grep -F 'Missing documentation dependency vendor/adrctl.bash; run make deps or make all' docs.stderr
+          test ! -e vendor/bashdeps.bash
+          test ! -e doc/adr/README.md
+          rm -rf vendor
+
       - name: Synchronize and verify project dependencies
         run: |
           make deps
@@ -96,6 +110,7 @@ jobs:
           test -x vendor/bashdeps.bash
           test -f vendor/bash-minifier.bash
           test -f vendor/doxygen-bash.awk
+          test -f vendor/adrctl.bash
 
       - name: Verify stale documentation dependency convergence
         run: |
@@ -118,13 +133,17 @@ jobs:
 
       - name: Verify generated documentation state
         run: |
+          test -f doc/adr/README.md
+          grep -Fq 'ADR-019: Publish Ephemeral ADR Navigation as the Reference Landing Page' doc/adr/README.md
+          git check-ignore -q doc/adr/README.md
           test -f doc/reference/index.html
           git check-ignore -q doc/reference/index.html
-          test -z "$(git status --porcelain --untracked-files=all -- doc/reference vendor)"
+          test -z "$(git status --porcelain --untracked-files=all -- doc/adr/README.md doc/reference vendor)"
 
       - name: Verify clean removes generated dependency state
         run: |
           make clean
           test ! -e vendor
           test ! -e dist
+          test ! -e doc/adr/README.md
           test ! -e doc/reference

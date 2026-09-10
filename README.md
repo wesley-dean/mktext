@@ -288,7 +288,8 @@ make test-source
 make test-generated
 make test-build
 make format
-make docs         # synchronize dependencies, then generate reference docs
+make adr-index    # generate the linked ADR landing page from prepared adrctl state
+make docs         # offline reference-doc generation from prepared dependencies
 ```
 
 `make build` intentionally performs no dependency acquisition or verification.  It
@@ -303,9 +304,10 @@ the ordinary dependencies declared in `dependencies.txt`.  The bootstrap artifac
 is deliberately excluded from the manifest to avoid a circular dependency.
 
 The manifest currently contains the commit-pinned Bash-Minifier artifact used by
-`make build` and the pinned Bash Doxygen filter used by `make docs`.  Their
-immutable URLs and expected SHA-256 digests are committed as reviewable project
-data.  `make deps-check` verifies the existing bootstrap and manifest state without
+`make build`, the pinned Bash Doxygen filter used by `make docs`, and the pinned
+`adrctl` release used to generate linked ADR navigation.  Their immutable URLs and
+expected SHA-256 digests are committed as reviewable project data.
+`make deps-check` verifies the existing bootstrap and manifest state without
 network access or repair.
 
 `make test` exercises the public behavior suite against maintained source and each
@@ -313,23 +315,32 @@ of `mktext.dev.bash`, `mktext.bash`, and `mktext.min.bash`; verifies direct
 execution and Bash 4.3 compatibility; checks all three SHA-256 files; and exercises
 the build/dependency boundary.
 
-`make docs` may use the network because it invokes `make deps` before generating
-the ignored `doc/reference/` site.  The Pages workflow uses the same path from
-`main`, verifies the resulting dependency state, and deploys the generated site
-directly without committing generated documentation.  `vendor/` and
-`doc/reference/` remain ignored generated state and are removed by `make clean`.
+`make docs` intentionally does not invoke `make deps` or repair dependency state.
+After `make deps` has prepared the Bash Doxygen filter and adrctl, `make docs`
+regenerates an ignored `doc/adr/README.md` from maintained
+`README.intro.md`/`README.outro.md` framing and the current ADR corpus, then uses
+that generated page as the Doxygen site landing page while producing the ignored
+`doc/reference/` site.  The Pages workflow performs dependency preparation
+explicitly, verifies it before and after documentation generation, and deploys
+`doc/reference/` without committing generated documentation.  `vendor/`, the
+generated ADR landing page, and `doc/reference/` remain generated state and are
+removed by the appropriate Make cleanup targets.
 
 Bats is the primary behavior-test framework.  ShellCheck and shfmt are the
 canonical Bash static-analysis and formatting tools.
 
 ## Architecture
 
-Architecture Decision Records are stored in `doc/adr/`.
+Architecture Decision Records are stored in `doc/adr/`.  The maintained
+`doc/decisions.md` file provides a concise map of those decisions, while the
+linked ADR index used by the published reference site is generated ephemerally
+during documentation builds.
 
 The normative public behavior is documented in `doc/mktext-spec.md`.
 
 ADR-018 records the checksum companion naming and historical-read compatibility
-policy.
+policy.  ADR-019 governs the ephemeral ADR landing page and the offline
+documentation-generation boundary.
 
 AI-assisted contributors should also review `AGENTS.md` before making
 substantive changes.

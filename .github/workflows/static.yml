@@ -34,11 +34,23 @@ jobs:
           sudo apt-get update
           sudo apt-get install --yes curl doxygen
 
+      - name: Synchronize and verify repository dependencies
+        run: |
+          make deps
+          make deps-check
+
       - name: Generate Doxygen documentation
         run: make docs
 
-      - name: Verify documentation dependency state
-        run: make deps-check
+      - name: Verify generated documentation state
+        run: |
+          make deps-check
+          test -f doc/adr/README.md
+          grep -Fq 'ADR-019: Publish Ephemeral ADR Navigation as the Reference Landing Page' doc/adr/README.md
+          git check-ignore -q doc/adr/README.md
+          test -f doc/reference/index.html
+          git check-ignore -q doc/reference/index.html
+          test -z "$(git status --porcelain --untracked-files=all -- doc/adr/README.md doc/reference vendor)"
 
       - name: Configure Pages
         uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0

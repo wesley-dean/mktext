@@ -1,8 +1,8 @@
 # Doxyfile
 #
 # Doxygen configuration for the mktext Bash library.  The Makefile docs target
-# prepares the manifest-managed Bash preprocessor filter before invoking this
-# configuration.
+# consumes prepared documentation dependencies and generates the ADR landing page
+# before invoking this configuration.
 
 PROJECT_NAME           = "mktext"
 PROJECT_BRIEF          = "Deterministic Bash text-substitution library"
@@ -17,13 +17,18 @@ GENERATE_MAN            = NO
 GENERATE_RTF           = NO
 GENERATE_XML           = NO
 
-INPUT                  = src/mktext.bash
+INPUT                  = src/mktext.bash \
+                         doc/adr
 RECURSIVE              = NO
-FILE_PATTERNS          = *.bash
+FILE_PATTERNS          = *.bash \
+                         *.md
 
 EXCLUDE                = tests \
                          vendor \
-                         dist
+                         dist \
+                         doc/adr/README.intro.md \
+                         doc/adr/README.outro.md \
+                         doc/adr/preflight-checklist.md
 EXCLUDE_PATTERNS       = */tests/* \
                          */vendor/* \
                          */dist/*
@@ -40,6 +45,7 @@ HIDE_UNDOC_CLASSES     = YES
 OPTIMIZE_OUTPUT_FOR_C  = YES
 MARKDOWN_SUPPORT       = YES
 AUTOLINK_SUPPORT       = YES
+USE_MDFILE_AS_MAINPAGE = doc/adr/README.md
 
 QUIET                  = YES
 WARNINGS               = YES
