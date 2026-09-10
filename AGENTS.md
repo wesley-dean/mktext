@@ -25,10 +25,16 @@ source-revision timestamp, and commit metadata and preserve the same public API.
 
 The ADR collection is the canonical source of architectural intent.
 
-Before making significant changes, review the relevant files under `doc/adr/`.
-Also review `doc/mktext-spec.md` when the change can affect public behavior.
-Checksum companion naming and historical-read compatibility are defined by
-ADR-018.
+Before making significant changes, review `doc/decisions.md` for the concise
+architectural map and then read the relevant files under `doc/adr/`.  Also review
+`doc/mktext-spec.md` when the change can affect public behavior.  Checksum
+companion naming and historical-read compatibility are defined by ADR-018, while
+ADR-019 governs the generated ADR landing page and offline documentation boundary.
+
+The `doc/adr/README.md` file used as the generated Doxygen landing page is not
+maintained source and may not exist in a fresh checkout.  Its maintained framing
+lives in `doc/adr/README.intro.md` and `doc/adr/README.outro.md`; the linked ADR
+list is generated from the ADR corpus by the pinned adrctl dependency.
 
 In particular, preserve these foundational boundaries:
 
@@ -74,7 +80,12 @@ Do not invent rationale when the repository does not establish it.
 - Ordinary externally acquired repository artifacts are declared in
   `dependencies.txt` and synchronized by bashdeps.
 - The manifest currently manages the commit-pinned Bash-Minifier used by
-  `make build` and the Bash Doxygen filter used by `make docs`.
+  `make build`, the Bash Doxygen filter used by `make docs`, and the pinned
+  `adrctl` release used by `make adr-index` and `make docs`.
+- `make docs` consumes prepared dependency state and must not synchronize or repair
+  dependencies.
+- `doc/adr/README.md` is generated, ignored documentation input; its maintained
+  framing is stored separately from the adrctl-generated linked ADR list.
 - One public `mktext` function dispatches context, rendering, help, and version
   forms.
 - Callers own Bash associative-array contexts.
@@ -101,6 +112,8 @@ Development:
 - shfmt
 - bashdeps for exact external build/development artifacts
 - Bash-Minifier for the generated minified release flavor
+- bash-doxygen for Bash reference extraction
+- adrctl for generated linked ADR navigation
 - Doxygen-compatible source documentation
 - GitHub Actions
 
@@ -174,10 +187,19 @@ verifies the already-present bootstrap and manifest-managed dependency state
 without network access or repair.  Do not make `deps-check` depend on the bootstrap
 file target, because that would silently turn verification into acquisition.
 
-The current manifest contains `vendor/bash-minifier.bash` for builds and
-`vendor/doxygen-bash.awk` for reference documentation.  Bash-Minifier must remain
-commit-pinned to an immutable raw URL and committed SHA-256 digest.  Do not
-reintroduce project-specific download policy for either manifest-managed artifact.
+The current manifest contains `vendor/bash-minifier.bash` for builds,
+`vendor/doxygen-bash.awk` for Bash reference documentation, and
+`vendor/adrctl.bash` for generated ADR navigation.  Bash-Minifier remains
+commit-pinned; the documentation tools remain release-pinned as recorded in the
+manifest, and all are authorized by committed SHA-256 digests.  Do not reintroduce
+project-specific download policy for manifest-managed artifacts.
+
+`make docs` SHALL remain network-free and non-repairing after dependency
+preparation.  It consumes the prepared Bash Doxygen filter and adrctl artifact,
+generates `doc/adr/README.md` atomically from maintained framing plus the current
+ADR corpus, and then invokes Doxygen.  Use `make deps` explicitly before `make
+docs` when prepared documentation state is absent.  Routine documentation
+generation must not add an ADR relationship graph.
 
 Treat `dependencies.txt` as reviewed project source and `vendor/` as ignored,
 generated dependency state.  Digest equality, not the destination filename,
@@ -216,7 +238,8 @@ by SHA-256 digests committed in repository source; a live `.sha256` or `.256`
 sidecar is not a replacement for committed trust data.
 
 All released Bash artifacts must remain independent of bashdeps,
-`dependencies.txt`, Bash-Minifier, the Doxygen filter, and `vendor/` at runtime.
+`dependencies.txt`, Bash-Minifier, bash-doxygen, adrctl, Doxygen, and `vendor/` at
+runtime.
 
 ## Scope Discipline
 
@@ -246,10 +269,11 @@ Documentation should explain intent, assumptions, constraints, safety posture,
 observable behavior, and non-goals where appropriate.
 
 Source-code documentation follows ADR-011.  Documentation generation and external
-dependency lifecycle follow ADR-015, ADR-016, and ADR-017.  Checksum companion
-naming and compatibility follow ADR-018.  When a documentation-only source change
-is requested, preserve executable lines verbatim and verify that only comments
-changed.
+dependency lifecycle follow ADR-015, ADR-016, ADR-017, and ADR-019.  Checksum
+companion naming and compatibility follow ADR-018.  `doc/decisions.md` is the
+concise architectural map; full ADRs remain authoritative for their reasoning and
+supersession history.  When a documentation-only source change is requested,
+preserve executable lines verbatim and verify that only comments changed.
 
 When intent cannot be established confidently, expose the ambiguity rather than
 writing plausible-sounding rationale.
@@ -277,7 +301,7 @@ embedded version/build metadata, Bash 4.3 compatibility, and the corresponding
 `.sha256` checksum file.
 
 Build/dependency tests should verify observable Make contracts rather than private
-bashdeps or Bash-Minifier internals.  Protect at least these boundaries:
+bashdeps, Bash-Minifier, or adrctl internals.  Protect at least these boundaries:
 
 - a plain clean-checkout `make build` does not acquire dependencies and fails when
   the minifier is absent;
@@ -285,8 +309,11 @@ bashdeps or Bash-Minifier internals.  Protect at least these boundaries:
   dependency manifest;
 - `make all` synchronizes dependencies before building;
 - `deps-check` remains offline and non-repairing;
+- `make docs` fails rather than acquiring dependencies when required prepared
+  documentation state is absent;
 - stale/tampered managed dependency bytes are detected and converged by the proper
-  target; and
+  target;
+- generated ADR navigation and Doxygen output remain ignored build state; and
 - all literal generated consumer artifacts remain functional after the dependency
   tree and manifest are removed.
 
@@ -320,6 +347,8 @@ When practical:
 - generate or validate documentation when documentation inputs change;
 - verify a clean `make build` does not download or repair dependencies;
 - verify `make all` prepares dependencies before building;
+- verify `make docs` does not download or repair dependencies;
+- verify the generated ADR landing page and Doxygen output are ignored state;
 - verify generated artifact metadata when build behavior changes;
 - verify documentation-only source changes did not alter executable lines.
 
@@ -331,10 +360,12 @@ was actually verified.
 Avoid:
 
 - editing generated `dist/` files as though they were maintained source;
+- treating generated `doc/adr/README.md` as maintained documentation source;
 - releasing artifact flavors carrying stale or mismatched version metadata;
 - generating `mktext.min.bash` directly from maintained source instead of from
   the conventional stripped artifact;
 - allowing plain `make build` to acquire or repair dependencies;
+- allowing `make docs` to acquire or repair dependencies;
 - making `make deps-check` bootstrap, download, or repair dependency state;
 - placing `vendor/bashdeps.bash` in `dependencies.txt` and creating a bootstrap
   cycle;
@@ -342,6 +373,7 @@ Avoid:
 - using moving dependency URLs when an immutable release, tag, or commit is
   available;
 - trusting a dependency filename or version label instead of the committed digest;
+- adding automatic ADR relationship-graph generation to the routine docs path;
 - failing to test all published artifact flavors and checksum files;
 - adding transformations because they appear convenient;
 - using `eval` or shell expansion for substitution;
