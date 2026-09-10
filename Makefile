@@ -31,13 +31,18 @@ BASHDEPS_URL := https://github.com/wesley-dean/bashdeps/releases/download/v$(BAS
 BASHDEPS_SHA256 := bb6c807fa12c010950bda06172ac0611d278c57aca1f8352f41502d0d76b4e6c
 BASH_MINIFIER := $(VENDOR_DIR)/bash-minifier.bash
 DOXYGEN_BASH_FILTER := $(VENDOR_DIR)/doxygen-bash.awk
+ADRCTL := $(VENDOR_DIR)/adrctl.bash
+ADR_DIR := doc/adr
+ADR_INDEX_INTRO := $(ADR_DIR)/README.intro.md
+ADR_INDEX_OUTRO := $(ADR_DIR)/README.outro.md
+ADR_INDEX_FILE := $(ADR_DIR)/README.md
 REFERENCE_DOC_DIR := doc/reference
 
 VERSION ?= 0.0.0-dev
 BUILD_COMMIT ?= $(shell git rev-parse --short=12 HEAD 2>/dev/null || printf 'unknown')
 BUILD_DATE ?= $(shell git show -s --format=%cI HEAD 2>/dev/null || printf 'unknown')
 
-.PHONY: all build check clean deps deps-check docs docs-clean FORCE format test test-build test-generated test-source verify-bashdeps
+.PHONY: all adr-index build check clean deps deps-check docs docs-clean FORCE format test test-build test-generated test-source verify-bashdeps
 
 ##
 # Synchronize external build/development dependencies, then build all release
@@ -269,8 +274,8 @@ verify-bashdeps:
 ##
 # Synchronize manifest-managed build/development dependencies through bashdeps.
 #
-# This target may use the network.  It is the repair/convergence path used by all
-# and docs, while plain build remains offline.
+# This target may use the network.  It is the explicit repair/convergence path;
+# plain build and docs consume already-prepared dependency state.
 #
 deps: $(BASHDEPS) $(DEPENDENCY_MANIFEST)
 	$(MAKE) --no-print-directory verify-bashdeps
@@ -283,19 +288,48 @@ deps-check: verify-bashdeps $(DEPENDENCY_MANIFEST)
 	"$(BASHDEPS)" verify "$(DEPENDENCY_MANIFEST)"
 
 ##
-# Remove generated reference documentation completely.
+# Generate the linked ADR landing page from maintained framing and ADR source.
+#
+# adrctl is manifest-managed prepared state.  Generation is atomic so a failed
+# report cannot replace a previously complete landing page with partial output.
+#
+adr-index:
+	@test -f "$(ADRCTL)" && test ! -L "$(ADRCTL)" || { \
+		printf '%s\n' 'Missing documentation dependency vendor/adrctl.bash; run make deps or make all' >&2; \
+		exit 1; \
+	}
+	@test -f "$(ADR_INDEX_INTRO)" || { printf 'Missing ADR index introduction: %s\n' "$(ADR_INDEX_INTRO)" >&2; exit 1; }
+	@test -f "$(ADR_INDEX_OUTRO)" || { printf 'Missing ADR index conclusion: %s\n' "$(ADR_INDEX_OUTRO)" >&2; exit 1; }
+	@tmp="$$(mktemp "$(ADR_INDEX_FILE).tmp.XXXXXX")"; \
+	trap 'rm -f "$$tmp"' EXIT; \
+	bash "$(ADRCTL)" generate toc -i "$(ADR_INDEX_INTRO)" -o "$(ADR_INDEX_OUTRO)" >"$$tmp"; \
+	mv "$$tmp" "$(ADR_INDEX_FILE)"; \
+	trap - EXIT
+
+##
+# Remove generated reference documentation and the generated ADR landing page.
 #
 docs-clean:
 	rm -rf "$(REFERENCE_DOC_DIR)"
+	rm -f "$(ADR_INDEX_FILE)" "$(ADR_INDEX_FILE).tmp"
 
 ##
-# Generate browsable Doxygen reference documentation.
+# Generate browsable Doxygen reference documentation from prepared dependencies.
 #
-# The Bash Doxygen filter is a manifest-managed data artifact.  This consumer
-# target owns the executable mode Doxygen needs rather than asking bashdeps to
-# infer artifact semantics.
+# This target is deliberately offline and non-repairing.  Dependency acquisition
+# belongs to make deps; docs consumes the prepared Bash filter and adrctl artifact.
 #
-docs: docs-clean deps
+docs:
+	@test -f "$(DOXYGEN_BASH_FILTER)" && test ! -L "$(DOXYGEN_BASH_FILTER)" || { \
+		printf '%s\n' 'Missing documentation dependency vendor/doxygen-bash.awk; run make deps or make all' >&2; \
+		exit 1; \
+	}
+	@test -f "$(ADRCTL)" && test ! -L "$(ADRCTL)" || { \
+		printf '%s\n' 'Missing documentation dependency vendor/adrctl.bash; run make deps or make all' >&2; \
+		exit 1; \
+	}
+	$(MAKE) --no-print-directory docs-clean
+	$(MAKE) --no-print-directory adr-index
 	chmod 0755 "$(DOXYGEN_BASH_FILTER)"
 	mkdir -p "$(REFERENCE_DOC_DIR)"
 	doxygen Doxyfile
