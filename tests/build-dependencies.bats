@@ -52,6 +52,18 @@ EOF
   chmod 0755 "${path}"
 }
 
+write_fake_adrctl() {
+  local path=$1
+
+  cat >"${path}" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+printf '%s\n' '# fake adrctl'
+EOF
+  chmod 0755 "${path}"
+}
+
 write_fake_bashdeps() {
   local path=$1
 
@@ -69,13 +81,16 @@ case ${command} in
     mkdir -p vendor
     cp "${BASHDEPS_TEST_DOXYGEN_SOURCE}" vendor/doxygen-bash.awk
     cp "${BASHDEPS_TEST_MINIFIER_SOURCE}" vendor/bash-minifier.bash
-    chmod 0644 vendor/doxygen-bash.awk vendor/bash-minifier.bash
+    cp "${BASHDEPS_TEST_ADRCTL_SOURCE}" vendor/adrctl.bash
+    chmod 0644 vendor/doxygen-bash.awk vendor/bash-minifier.bash vendor/adrctl.bash
     ;;
   verify)
     [[ -f vendor/doxygen-bash.awk ]]
     [[ -f vendor/bash-minifier.bash ]]
+    [[ -f vendor/adrctl.bash ]]
     cmp "${BASHDEPS_TEST_DOXYGEN_SOURCE}" vendor/doxygen-bash.awk
     cmp "${BASHDEPS_TEST_MINIFIER_SOURCE}" vendor/bash-minifier.bash
+    cmp "${BASHDEPS_TEST_ADRCTL_SOURCE}" vendor/adrctl.bash
     ;;
   *)
     printf '%s\n' "unexpected fake bashdeps command: ${command}" >&2
@@ -115,10 +130,12 @@ prepare_fake_dependency_sources() {
   FAKE_BOOTSTRAP="${FIXTURE_ROOT}/released-bashdeps.bash"
   FAKE_DOXYGEN="${FIXTURE_ROOT}/expected-doxygen-bash.awk"
   FAKE_MINIFIER="${FIXTURE_ROOT}/expected-bash-minifier.bash"
+  FAKE_ADRCTL="${FIXTURE_ROOT}/expected-adrctl.bash"
 
   write_fake_bashdeps "${FAKE_BOOTSTRAP}"
   printf '%s\n' '# expected documentation filter bytes' >"${FAKE_DOXYGEN}"
   write_fake_minifier "${FAKE_MINIFIER}"
+  write_fake_adrctl "${FAKE_ADRCTL}"
   FAKE_BOOTSTRAP_DIGEST="$(sha256_of "${FAKE_BOOTSTRAP}")"
 }
 
@@ -159,6 +176,23 @@ prepare_fake_dependency_sources() {
   done
 }
 
+@test "docs fails without prepared adrctl and does not acquire dependencies" {
+  mkdir -p "${FIXTURE_ROOT}/vendor"
+  printf '%s\n' '# prepared documentation filter' >"${FIXTURE_ROOT}/vendor/doxygen-bash.awk"
+  write_fake_curl
+
+  run env \
+    PATH="${FAKE_BIN}:${PATH}" \
+    BASHDEPS_CURL_SENTINEL="${CURL_SENTINEL}" \
+    make -C "${FIXTURE_ROOT}" docs
+
+  [ "${status}" -ne 0 ]
+  [[ "${output}" == *'Missing documentation dependency vendor/adrctl.bash; run make deps or make all'* ]]
+  [ ! -e "${CURL_SENTINEL}" ]
+  [ ! -e "${FIXTURE_ROOT}/vendor/bashdeps.bash" ]
+  [ ! -e "${FIXTURE_ROOT}/doc/adr/README.md" ]
+}
+
 @test "all synchronizes dependencies before building all six artifacts" {
   prepare_fake_dependency_sources
   write_fake_curl
@@ -169,6 +203,7 @@ prepare_fake_dependency_sources() {
     BASHDEPS_TEST_BOOTSTRAP="${FAKE_BOOTSTRAP}" \
     BASHDEPS_TEST_DOXYGEN_SOURCE="${FAKE_DOXYGEN}" \
     BASHDEPS_TEST_MINIFIER_SOURCE="${FAKE_MINIFIER}" \
+    BASHDEPS_TEST_ADRCTL_SOURCE="${FAKE_ADRCTL}" \
     make -C "${FIXTURE_ROOT}" all \
       VERSION=0.0.0-test \
       BASHDEPS_URL=https://example.test/bashdeps.bash \
@@ -178,6 +213,7 @@ prepare_fake_dependency_sources() {
   [ -x "${FIXTURE_ROOT}/vendor/bashdeps.bash" ]
   cmp "${FAKE_DOXYGEN}" "${FIXTURE_ROOT}/vendor/doxygen-bash.awk"
   cmp "${FAKE_MINIFIER}" "${FIXTURE_ROOT}/vendor/bash-minifier.bash"
+  cmp "${FAKE_ADRCTL}" "${FIXTURE_ROOT}/vendor/adrctl.bash"
 
   for artifact in mktext.dev.bash mktext.bash mktext.min.bash; do
     [ -x "${FIXTURE_ROOT}/dist/${artifact}" ]
@@ -191,6 +227,7 @@ prepare_fake_dependency_sources() {
   cp "${FAKE_BOOTSTRAP}" "${FIXTURE_ROOT}/vendor/bashdeps.bash"
   printf '%s\n' 'stale filter bytes' >"${FIXTURE_ROOT}/vendor/doxygen-bash.awk"
   printf '%s\n' 'stale minifier bytes' >"${FIXTURE_ROOT}/vendor/bash-minifier.bash"
+  printf '%s\n' 'stale adrctl bytes' >"${FIXTURE_ROOT}/vendor/adrctl.bash"
   write_fake_curl
 
   run env \
@@ -199,6 +236,7 @@ prepare_fake_dependency_sources() {
     BASHDEPS_TEST_BOOTSTRAP="${FAKE_BOOTSTRAP}" \
     BASHDEPS_TEST_DOXYGEN_SOURCE="${FAKE_DOXYGEN}" \
     BASHDEPS_TEST_MINIFIER_SOURCE="${FAKE_MINIFIER}" \
+    BASHDEPS_TEST_ADRCTL_SOURCE="${FAKE_ADRCTL}" \
     make -C "${FIXTURE_ROOT}" deps \
       BASHDEPS_URL=https://example.test/bashdeps.bash \
       BASHDEPS_SHA256="${FAKE_BOOTSTRAP_DIGEST}"
@@ -206,6 +244,7 @@ prepare_fake_dependency_sources() {
   [ "${status}" -eq 0 ]
   cmp "${FAKE_DOXYGEN}" "${FIXTURE_ROOT}/vendor/doxygen-bash.awk"
   cmp "${FAKE_MINIFIER}" "${FIXTURE_ROOT}/vendor/bash-minifier.bash"
+  cmp "${FAKE_ADRCTL}" "${FIXTURE_ROOT}/vendor/adrctl.bash"
   [ ! -e "${CURL_SENTINEL}" ]
 }
 
@@ -214,6 +253,7 @@ prepare_fake_dependency_sources() {
   mkdir -p "${FIXTURE_ROOT}/vendor"
   cp "${FAKE_BOOTSTRAP}" "${FIXTURE_ROOT}/vendor/bashdeps.bash"
   cp "${FAKE_DOXYGEN}" "${FIXTURE_ROOT}/vendor/doxygen-bash.awk"
+  cp "${FAKE_ADRCTL}" "${FIXTURE_ROOT}/vendor/adrctl.bash"
   printf '%s\n' 'tampered minifier bytes' >"${FIXTURE_ROOT}/vendor/bash-minifier.bash"
   write_fake_curl
 
@@ -223,6 +263,7 @@ prepare_fake_dependency_sources() {
     BASHDEPS_TEST_BOOTSTRAP="${FAKE_BOOTSTRAP}" \
     BASHDEPS_TEST_DOXYGEN_SOURCE="${FAKE_DOXYGEN}" \
     BASHDEPS_TEST_MINIFIER_SOURCE="${FAKE_MINIFIER}" \
+    BASHDEPS_TEST_ADRCTL_SOURCE="${FAKE_ADRCTL}" \
     make -C "${FIXTURE_ROOT}" deps-check \
       BASHDEPS_SHA256="${FAKE_BOOTSTRAP_DIGEST}"
 
@@ -265,13 +306,17 @@ prepare_fake_dependency_sources() {
   mkdir -p \
     "${FIXTURE_ROOT}/vendor" \
     "${FIXTURE_ROOT}/dist" \
+    "${FIXTURE_ROOT}/doc/adr" \
     "${FIXTURE_ROOT}/doc/reference"
   : >"${FIXTURE_ROOT}/vendor/bashdeps.bash"
   : >"${FIXTURE_ROOT}/vendor/bash-minifier.bash"
   : >"${FIXTURE_ROOT}/vendor/doxygen-bash.awk"
+  : >"${FIXTURE_ROOT}/vendor/adrctl.bash"
   : >"${FIXTURE_ROOT}/dist/mktext.dev.bash"
   : >"${FIXTURE_ROOT}/dist/mktext.bash"
   : >"${FIXTURE_ROOT}/dist/mktext.min.bash"
+  : >"${FIXTURE_ROOT}/doc/adr/README.md"
+  : >"${FIXTURE_ROOT}/doc/adr/README.md.tmp"
   : >"${FIXTURE_ROOT}/doc/reference/index.html"
 
   run make -C "${FIXTURE_ROOT}" clean
@@ -279,6 +324,8 @@ prepare_fake_dependency_sources() {
   [ "${status}" -eq 0 ]
   [ ! -e "${FIXTURE_ROOT}/vendor" ]
   [ ! -e "${FIXTURE_ROOT}/dist" ]
+  [ ! -e "${FIXTURE_ROOT}/doc/adr/README.md" ]
+  [ ! -e "${FIXTURE_ROOT}/doc/adr/README.md.tmp" ]
   [ ! -e "${FIXTURE_ROOT}/doc/reference" ]
 }
 
