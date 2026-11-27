@@ -245,3 +245,17 @@ The change preserves repository governance and leaves open PR limits unchanged
 until backlog cleanup, with high-risk actions requiring targeted review.
 
 See [ADR-021](adr/ADR-021-consolidate-scheduled-github-actions-updates.md).
+
+## ADR-022: Migrate Routine Dependency Updates to Centrally Managed Renovate
+
+This repository explicitly enrolls in Jenkins-hosted Renovate and disables
+ordinary scheduled Dependabot GitHub Actions version-update PRs.
+Independently triggered security updates, reviewed immutable action pins,
+required checks, and human code-owner approval remain separate.
+ADR-022 partially supersedes ADR-021 as to routine update provider,
+PR-limit policy, and retirement of superseded routine Dependabot PRs,
+while retaining its supply-chain and security-response requirements.
+Actual Renovate execution is an operational verification step, not a
+claim established by this configuration.
+
+See [ADR-022](adr/ADR-022-migrate-routine-dependency-updates-to-renovate.md).
