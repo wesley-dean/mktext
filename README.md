@@ -329,23 +329,18 @@ removed by the appropriate Make cleanup targets.
 Bats is the primary behavior-test framework.  ShellCheck and shfmt are the
 canonical Bash static-analysis and formatting tools.
 
-## Dependabot Maintenance
+## Dependency Maintenance
 
-Routine GitHub Actions version updates are checked weekly with a seven-day
-cooldown and collected in the `actions-version-updates` group, including
-eligible major, minor, and patch releases.  Security updates are separate
-and depend on the repository's security-update features being enabled.
-The current non-major auto-merge condition remains in place; a mixed
-group containing a major update is expected to require the normal
-review path.
-
-Review each dependency within a group, particularly actions that can write
-to the repository or publish release artifacts.  CI checks must exercise
-the relevant changed behavior before their success is treated as evidence.
-This configuration does not retroactively consolidate open PRs, guarantee
-one PR per week, or enforce CODEOWNER approval without branch protection.
-
-See ADR-021 for the decision, tradeoffs, and rollout boundaries.
+Routine dependency version updates are handled by the centrally hosted
+Jenkins Renovate service, enrolled through root `renovate.json`. The
+existing Dependabot GitHub Actions ecosystem disables scheduled version
+PRs with `open-pull-requests-limit: 0`, while GitHub vulnerability alerts
+and independent Dependabot security-update PRs remain unaffected by this
+version-update configuration. The existing `dependabot[bot]`-scoped
+non-major auto-merge workflow remains for Dependabot security PRs,
+without exempting Renovate from required checks and human approval.
+Existing routine Dependabot PRs are retired with a migration link.
+See [ADR-022](doc/adr/ADR-022-migrate-routine-dependency-updates-to-renovate.md).
 
 ## Architecture
 
